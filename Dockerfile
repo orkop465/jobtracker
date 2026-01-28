@@ -21,7 +21,6 @@ COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/next.config.* ./  # ok if missing; if it errors we’ll remove it
 
 EXPOSE 8080
 CMD ["npm", "start", "--", "-p", "8080"]
