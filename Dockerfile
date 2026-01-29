@@ -3,6 +3,13 @@ FROM node:20-slim AS builder
 WORKDIR /app
 
 COPY package*.json ./
+COPY prisma ./prisma
+COPY prisma.config.ts ./
+
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
+ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
+
 RUN npm ci
 
 COPY . .
