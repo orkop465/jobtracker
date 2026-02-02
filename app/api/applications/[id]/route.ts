@@ -13,6 +13,7 @@ const PatchSchema = z.object({
     .enum(["APPLIED", "SCREEN", "INTERVIEW", "OFFER", "REJECTED", "WITHDRAWN"])
     .optional(),
   appliedAt: z.iso.datetime().optional(),
+  resumeId: z.string().optional().or(z.literal("")).optional(),
 });
 
 export async function PATCH(
@@ -39,6 +40,7 @@ export async function PATCH(
           : {}),
         ...(parsed.status !== undefined ? { status: parsed.status } : {}),
         ...(parsed.appliedAt !== undefined ? { appliedAt: new Date(parsed.appliedAt) } : {}),
+        ...(parsed.resumeId !== undefined ? { resumeId: parsed.resumeId ? parsed.resumeId : null } : {}),
       },
     });
 

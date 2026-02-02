@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react";
 
+type Resume = {
+  id: string;
+  label: string;
+};
+
 type Application = {
   id: string;
   company: string;
@@ -10,7 +15,10 @@ type Application = {
   location: string | null;
   status: string;
   appliedAt: string;
+  resumeId: string | null;
+  resume: Resume | null;
 };
+
 
 export default function ApplicationsPage() {
   const [items, setItems] = useState<Application[]>([]);
@@ -21,6 +29,7 @@ export default function ApplicationsPage() {
   const [roleTitle, setRoleTitle] = useState("");
   const [jobUrl, setJobUrl] = useState("");
   const [location, setLocation] = useState("");
+  const [resumes, setResumes] = useState<Resume[]>([]);
 
   async function load(showSpinner = true) {
     if (showSpinner) setLoading(true);
@@ -32,6 +41,13 @@ export default function ApplicationsPage() {
     setItems(data.items ?? []);
     if (showSpinner) setLoading(false);
   }
+
+  async function loadResumes() {
+    const res = await fetch("/api/resumes", { cache: "no-store" });
+    const data = await res.json();
+    setResumes((data.items ?? []).map((r: any) => ({ id: r.id, label: r.label })));
+  }
+
 
   async function onDelete(id: string) {
     setErr(null);
@@ -93,8 +109,41 @@ export default function ApplicationsPage() {
     await load(false);
   }
 
+  async function onResumeChange(id: string, resumeId: string) {
+    setErr(null);
+
+    const prev = items;
+    const nextResume = resumes.find((r) => r.id === resumeId) ?? null;
+
+    setItems((cur) =>
+      cur.map((a) =>
+        a.id === id
+          ? {
+            ...a,
+            resumeId: resumeId ? resumeId : null,
+            resume: resumeId ? nextResume : null,
+          }
+          : a
+      )
+    );
+
+    const res = await fetch(`/api/applications/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resumeId }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      setItems(prev);
+      setErr(data.error ?? "Resume update failed");
+    }
+  }
+
+
   useEffect(() => {
     load(true);
+    loadResumes();
   }, []);
 
   return (
@@ -198,6 +247,43 @@ export default function ApplicationsPage() {
                   Delete
                 </button>
               </div>
+              <div style={{ marginTop: 10 }}>
+                <label style={{ fontSize: 13, opacity: 0.85 }}>
+                  Resume{" "}
+                  <select
+                    value={a.resumeId ?? ""}
+                    onChange={(e) => onResumeChange(a.id, e.target.value)}
+                    style={{
+                      marginLeft: 6,
+                      background: "#111",
+                      color: "#fff",
+                      border: "1px solid #333",
+                      borderRadius: 8,
+                      padding: "6px 8px",
+                    }}
+                  >
+                    <option value="" style={{ background: "#111", color: "#fff" }}>
+                      None
+                    </option>
+                    {resumes.map((r) => (
+                      <option
+                        key={r.id}
+                        value={r.id}
+                        style={{ background: "#111", color: "#fff" }}
+                      >
+                        {r.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {a.resume?.label && (
+                  <div style={{ fontSize: 13, opacity: 0.8, marginTop: 6 }}>
+                    Selected: {a.resume.label}
+                  </div>
+                )}
+              </div>
+
               {a.location && <div>Location: {a.location}</div>}
               {a.jobUrl && (
                 <div>

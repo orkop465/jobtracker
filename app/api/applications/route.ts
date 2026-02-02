@@ -15,6 +15,9 @@ const CreateApplicationSchema = z.object({
 
 export async function GET() {
   const apps = await prisma.application.findMany({
+    include: {
+        resume: true,
+    },
     orderBy: { appliedAt: "desc" },
     take: 50,
   });

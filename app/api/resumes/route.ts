@@ -42,7 +42,9 @@ export async function POST(req: Request) {
     }
 
     const safeName = (file.name || "resume.pdf").replace(/[^\w.\-() ]+/g, "_");
-    const objectName = `resumes/${Date.now()}-${safeName}`;
+    const prefix = process.env.NODE_ENV === "production" ? "prod" : "dev";
+    const objectName = `resumes/${prefix}/${Date.now()}-${safeName}`;
+
     const gcsPath = `gs://${bucketName}/${objectName}`;
 
     const bucket = storage.bucket(bucketName);
