@@ -20,6 +20,8 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const MAX_BYTES = 2 * 1024 * 1024;
+
     const bucketName = mustGetEnv("RESUMES_BUCKET");
 
     const form = await req.formData();
@@ -35,11 +37,11 @@ export async function POST(req: Request) {
     if (file.type !== "application/pdf") {
       return NextResponse.json({ error: "Only PDF files are allowed" }, { status: 400 });
     }
-
-    const bytes = Buffer.from(await file.arrayBuffer());
-    if (bytes.length > 10 * 1024 * 1024) {
+    if (file.size > MAX_BYTES) {
       return NextResponse.json({ error: "File too large (max 10MB)" }, { status: 400 });
     }
+
+    const bytes = Buffer.from(await file.arrayBuffer());
 
     const safeName = (file.name || "resume.pdf").replace(/[^\w.\-() ]+/g, "_");
     const prefix = process.env.NODE_ENV === "production" ? "prod" : "dev";
