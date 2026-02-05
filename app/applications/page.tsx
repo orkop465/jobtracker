@@ -19,6 +19,21 @@ type Application = {
   resume: Resume | null;
 };
 
+type StatusEvent = {
+  id: string;
+  fromStatus: string;
+  toStatus: string;
+  occurredAt: string;
+};
+
+
+async function safeJson(res: Response) {
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
 
 export default function ApplicationsPage() {
   const [items, setItems] = useState<Application[]>([]);
@@ -31,62 +46,97 @@ export default function ApplicationsPage() {
   const [location, setLocation] = useState("");
   const [resumes, setResumes] = useState<Resume[]>([]);
 
+  const [openTimelineId, setOpenTimelineId] = useState<string | null>(null);
+  const [timeline, setTimeline] = useState<Record<string, StatusEvent[]>>({});
+
+  // Prevent double-submits on the same row
+  const [busyId, setBusyId] = useState<string | null>(null);
+
   async function load(showSpinner = true) {
     if (showSpinner) setLoading(true);
     setErr(null);
 
     const res = await fetch("/api/applications", { cache: "no-store" });
-    const data = await res.json();
+    const data = await safeJson(res);
 
-    setItems(data.items ?? []);
+    if (!res.ok) {
+      setItems([]);
+      setErr(data?.error ?? `Failed to load applications (${res.status})`);
+      if (showSpinner) setLoading(false);
+      return;
+    }
+
+    setItems(data?.items ?? []);
     if (showSpinner) setLoading(false);
   }
 
   async function loadResumes() {
     const res = await fetch("/api/resumes", { cache: "no-store" });
-    const data = await res.json();
-    setResumes((data.items ?? []).map((r: any) => ({ id: r.id, label: r.label })));
+    const data = await safeJson(res);
+
+    if (!res.ok) {
+      setResumes([]);
+      setErr(data?.error ?? `Failed to load resumes (${res.status})`);
+      return;
+    }
+
+    setResumes((data?.items ?? []).map((r: any) => ({ id: r.id, label: r.label })));
   }
 
-
   async function onDelete(id: string) {
+    if (busyId === id) return;
     setErr(null);
 
     const prev = items;
     setItems((cur) => cur.filter((a) => a.id !== id));
+    setBusyId(id);
 
-    const res = await fetch(`/api/applications/${id}`, { method: "DELETE" });
-    const data = await res.json();
+    try {
+      const res = await fetch(`/api/applications/${id}`, { method: "DELETE" });
+      const data = await safeJson(res);
 
-    if (!res.ok) {
-      setItems(prev);
-      setErr(data.error ?? "Delete failed");
-      return;
+      if (!res.ok) {
+        setItems(prev);
+        setErr(data?.error ?? `Delete failed (${res.status})`);
+        return;
+      }
+    } finally {
+      setBusyId(null);
     }
   }
 
   async function onStatusChange(id: string, status: string) {
+    if (busyId === id) return;
     setErr(null);
 
     const prev = items;
     setItems((cur) => cur.map((a) => (a.id === id ? { ...a, status } : a)));
+    setBusyId(id);
 
-    const res = await fetch(`/api/applications/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
+    try {
+      const res = await fetch(`/api/applications/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
 
-    const data = await res.json();
-    if (!res.ok) {
-      setItems(prev);
-      setErr(data.error ?? "Update failed");
-      return;
+      const data = await safeJson(res);
+
+      if (!res.ok) {
+        setItems(prev);
+        setErr(data?.error ?? `Update failed (${res.status})`);
+        return;
+      }
+
+      if (openTimelineId === id) {
+        await loadTimeline(id);
+      }
+    } finally {
+      setBusyId(null);
     }
   }
 
-
-  async function onCreate(e: React.FormEvent) {
+  async function onCreate(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     setErr(null);
 
@@ -96,9 +146,10 @@ export default function ApplicationsPage() {
       body: JSON.stringify({ company, roleTitle, jobUrl, location }),
     });
 
-    const data = await res.json();
+    const data = await safeJson(res);
+
     if (!res.ok) {
-      setErr(data.error ?? "Request failed");
+      setErr(data?.error ?? `Request failed (${res.status})`);
       return;
     }
 
@@ -110,6 +161,7 @@ export default function ApplicationsPage() {
   }
 
   async function onResumeChange(id: string, resumeId: string) {
+    if (busyId === id) return;
     setErr(null);
 
     const prev = items;
@@ -127,19 +179,75 @@ export default function ApplicationsPage() {
       )
     );
 
-    const res = await fetch(`/api/applications/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ resumeId }),
-    });
+    setBusyId(id);
+    try {
+      const res = await fetch(`/api/applications/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resumeId }),
+      });
 
-    const data = await res.json();
-    if (!res.ok) {
-      setItems(prev);
-      setErr(data.error ?? "Resume update failed");
+      const data = await safeJson(res);
+
+      if (!res.ok) {
+        setItems(prev);
+        setErr(data?.error ?? `Resume update failed (${res.status})`);
+        return;
+      }
+    } finally {
+      setBusyId(null);
     }
   }
 
+  async function loadTimeline(appId: string) {
+    const res = await fetch(`/api/applications/${appId}/status-events`, { cache: "no-store" });
+    const data = await safeJson(res);
+
+    if (!res.ok) {
+      setErr(data?.error ?? `Failed to load timeline (${res.status})`);
+      return;
+    }
+
+    setTimeline((cur) => ({ ...cur, [appId]: data?.items ?? [] }));
+  }
+
+  async function onToggleTimeline(appId: string) {
+    if (openTimelineId === appId) {
+      setOpenTimelineId(null);
+      return;
+    }
+
+    setOpenTimelineId(appId);
+    await loadTimeline(appId);
+  }
+
+  async function onUndoStatus(appId: string) {
+    if (busyId === appId) return;
+    setErr(null);
+    setBusyId(appId);
+
+    try {
+      const res = await fetch(`/api/applications/${appId}/undo-status`, { method: "POST" });
+      const data = await safeJson(res);
+
+      if (!res.ok) {
+        setErr(data?.error ?? `Undo failed (${res.status})`);
+        return;
+      }
+
+      // Update the application status in the list immediately
+      setItems((cur) =>
+        cur.map((a) => (a.id === appId ? { ...a, status: data.newStatus } : a))
+      );
+
+      // Refresh timeline UI if it's open
+      if (openTimelineId === appId) {
+        await loadTimeline(appId);
+      }
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   useEffect(() => {
     load(true);
@@ -194,17 +302,20 @@ export default function ApplicationsPage() {
                 border: "1px solid #ddd",
                 borderRadius: 10,
                 padding: 12,
+                opacity: busyId === a.id ? 0.8 : 1,
               }}
             >
               <div style={{ fontWeight: 700 }}>
                 {a.company} — {a.roleTitle}
               </div>
+
               <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                 <label style={{ fontSize: 13, opacity: 0.85 }}>
                   Status{" "}
                   <select
                     value={a.status}
                     onChange={(e) => onStatusChange(a.id, e.target.value)}
+                    disabled={busyId === a.id}
                     style={{
                       marginLeft: 6,
                       background: "#111",
@@ -241,18 +352,40 @@ export default function ApplicationsPage() {
 
                 <button
                   onClick={() => onDelete(a.id)}
+                  disabled={busyId === a.id}
                   style={{ marginLeft: "auto", padding: "6px 10px" }}
                   type="button"
                 >
                   Delete
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => onToggleTimeline(a.id)}
+                  disabled={busyId === a.id}
+                  style={{ padding: "6px 10px" }}
+                >
+                  {openTimelineId === a.id ? "Hide timeline" : "Timeline"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onUndoStatus(a.id)}
+                  disabled={busyId === a.id}
+                  style={{ padding: "6px 10px" }}
+                >
+                  Undo
+                </button>
+
               </div>
+
               <div style={{ marginTop: 10 }}>
                 <label style={{ fontSize: 13, opacity: 0.85 }}>
                   Resume{" "}
                   <select
                     value={a.resumeId ?? ""}
                     onChange={(e) => onResumeChange(a.id, e.target.value)}
+                    disabled={busyId === a.id}
                     style={{
                       marginLeft: 6,
                       background: "#111",
@@ -283,6 +416,30 @@ export default function ApplicationsPage() {
                   </div>
                 )}
               </div>
+
+              {openTimelineId === a.id && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #222" }}>
+                  <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 8 }}>
+                    Status timeline
+                  </div>
+
+                  {(timeline[a.id] ?? []).length === 0 ? (
+                    <div style={{ fontSize: 13, opacity: 0.7 }}>No status changes yet.</div>
+                  ) : (
+                    <div style={{ display: "grid", gap: 6 }}>
+                      {(timeline[a.id] ?? []).map((ev) => (
+                        <div key={ev.id} style={{ fontSize: 13, opacity: 0.9 }}>
+                          <span style={{ opacity: 0.75 }}>
+                            {new Date(ev.occurredAt).toLocaleString()}:
+                          </span>{" "}
+                          {ev.fromStatus} → {ev.toStatus}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
 
               {a.location && <div>Location: {a.location}</div>}
               {a.jobUrl && (

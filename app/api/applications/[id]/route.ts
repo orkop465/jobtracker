@@ -16,36 +16,59 @@ const PatchSchema = z.object({
   resumeId: z.string().optional().or(z.literal("")).optional(),
 });
 
-export async function PATCH(
-  _req: Request,
-  ctx: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await ctx.params;
     const appId = IdSchema.parse(id);
 
-    const body = await _req.json();
+    const body = await req.json();
     const parsed = PatchSchema.parse(body);
 
-    const updated = await prisma.application.update({
+    // If nothing to update, return early with a valid response
+    if (Object.keys(parsed).length === 0) {
+      return NextResponse.json({ ok: true });
+    }
+
+    // Read existing status once (for event creation)
+    const existing = await prisma.application.findUnique({
       where: { id: appId },
-      data: {
-        ...(parsed.company !== undefined ? { company: parsed.company.trim() } : {}),
-        ...(parsed.roleTitle !== undefined ? { roleTitle: parsed.roleTitle.trim() } : {}),
-        ...(parsed.jobUrl !== undefined
-          ? { jobUrl: parsed.jobUrl ? parsed.jobUrl : null }
-          : {}),
-        ...(parsed.location !== undefined
-          ? { location: parsed.location ? parsed.location : null }
-          : {}),
-        ...(parsed.status !== undefined ? { status: parsed.status } : {}),
-        ...(parsed.appliedAt !== undefined ? { appliedAt: new Date(parsed.appliedAt) } : {}),
-        ...(parsed.resumeId !== undefined ? { resumeId: parsed.resumeId ? parsed.resumeId : null } : {}),
-      },
+      select: { status: true },
     });
 
-    return NextResponse.json({ item: updated });
+    if (!existing) {
+      return NextResponse.json({ error: "Application not found" }, { status: 404 });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const next = await tx.application.update({
+        where: { id: appId },
+        data: {
+          ...(parsed.company !== undefined ? { company: parsed.company.trim() } : {}),
+          ...(parsed.roleTitle !== undefined ? { roleTitle: parsed.roleTitle.trim() } : {}),
+          ...(parsed.jobUrl !== undefined ? { jobUrl: parsed.jobUrl ? parsed.jobUrl : null } : {}),
+          ...(parsed.location !== undefined ? { location: parsed.location ? parsed.location : null } : {}),
+          ...(parsed.resumeId !== undefined ? { resumeId: parsed.resumeId ? parsed.resumeId : null } : {}),
+          ...(parsed.appliedAt !== undefined ? { appliedAt: new Date(parsed.appliedAt) } : {}),
+          ...(parsed.status !== undefined ? { status: parsed.status } : {}),
+        },
+      });
+
+      if (parsed.status !== undefined && existing.status !== parsed.status) {
+        await tx.applicationStatusEvent.create({
+          data: {
+            applicationId: appId,
+            fromStatus: existing.status,
+            toStatus: parsed.status,
+          },
+        });
+      }
+
+      return next;
+    });
+
+    return NextResponse.json({ ok: true, item: updated });
   } catch (err: any) {
+    // Always return JSON so the client can parse it
     return NextResponse.json(
       { error: err?.message ?? String(err) },
       { status: 400 }

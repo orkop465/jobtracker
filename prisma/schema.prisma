@@ -28,7 +28,7 @@ model Resume {
 }
 
 model Application {
-  id        String            @id @default(cuid())
+  id String @id @default(cuid())
 
   company   String
   roleTitle String
@@ -40,11 +40,33 @@ model Application {
   resumeId String?
   resume   Resume? @relation(fields: [resumeId], references: [id], onDelete: SetNull)
 
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  statusEvents ApplicationStatusEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([company])
   @@index([status])
   @@index([appliedAt])
   @@index([resumeId])
+}
+
+model ApplicationStatusEvent {
+  id            String @id @default(cuid())
+  applicationId String
+
+  fromStatus ApplicationStatus
+  toStatus   ApplicationStatus
+
+  occurredAt DateTime @default(now())
+
+  voidedAt   DateTime?
+  voidedById String?   @unique
+
+  createdAt DateTime @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, occurredAt])
+  @@index([applicationId, createdAt])
 }
