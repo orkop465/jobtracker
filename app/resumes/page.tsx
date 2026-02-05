@@ -29,7 +29,7 @@ export default function ResumesPage() {
     load();
   }, []);
 
-  async function onUpload(e: React.FormEvent) {
+  async function onUpload(e: React.SyntheticEvent) {
     e.preventDefault();
     setErr(null);
 
@@ -57,6 +57,30 @@ export default function ResumesPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function onView(resumeId: string) {
+    setErr(null);
+
+    const res = await fetch(`/api/resumes/${resumeId}/view`, { cache: "no-store" });
+    let data: any = null;
+    try {
+      data = await res.json();
+    } catch {
+      data = null;
+    }
+
+    if (!res.ok) {
+      setErr(data?.error ?? `View failed (${res.status})`);
+      return;
+    }
+
+    if (!data?.url) {
+      setErr("View failed: missing signed URL");
+      return;
+    }
+
+    window.open(data.url, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -94,6 +118,9 @@ export default function ResumesPage() {
               {r.filename} • {(r.sizeBytes / 1024).toFixed(1)} KB •{" "}
               {new Date(r.createdAt).toLocaleString()}
             </div>
+            <button type="button" onClick={() => onView(r.id)} style={{ padding: "6px 10px" }}>
+              View
+            </button>
           </div>
         ))}
       </div>
