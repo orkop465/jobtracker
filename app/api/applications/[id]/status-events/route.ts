@@ -1,16 +1,33 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { auth } from "@/auth";
 
 const IdSchema = z.string().min(1);
 
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+type Ctx = { params: { id: string } };
+
+async function getUserIdOrNull() {
+  const session = await auth();
+  return session?.user?.id ?? null;
+}
+
+export async function GET(_req: Request, ctx: Ctx) {
+  const userId = await getUserIdOrNull();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
-    const { id } = await ctx.params;
-    const appId = IdSchema.parse(id);
+    const appId = IdSchema.parse(ctx.params.id);
+
+    // Ownership check: application must belong to the logged-in user
+    const owns = await prisma.application.findFirst({
+      where: { id: appId, userId },
+      select: { id: true },
+    });
+    if (!owns) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const items = await prisma.applicationStatusEvent.findMany({
-      where: { applicationId: appId, voidedAt: null },
+      where: { applicationId: appId, userId, voidedAt: null },
       orderBy: { occurredAt: "asc" },
       take: 50,
     });

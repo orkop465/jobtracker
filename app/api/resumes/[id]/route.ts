@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Storage } from "@google-cloud/storage";
 import { z } from "zod";
+import { auth } from "@/auth";
 
 const storage = new Storage();
 const IdSchema = z.string().min(1);
@@ -17,14 +18,22 @@ function parseGsPath(gsPath: string) {
   return { bucket, object };
 }
 
-export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  try {
-    const { id } = await ctx.params;
-    const resumeId = IdSchema.parse(id);
+type Ctx = { params: { id: string } };
 
-    // Later (Phase 4 auth): verify ownership here.
-    const resume = await prisma.resume.findUnique({
-      where: { id: resumeId },
+async function getUserIdOrNull() {
+  const session = await auth();
+  return session?.user?.id ?? null;
+}
+
+export async function DELETE(_req: Request, ctx: Ctx) {
+  const userId = await getUserIdOrNull();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    const resumeId = IdSchema.parse(ctx.params.id);
+
+    const resume = await prisma.resume.findFirst({
+      where: { id: resumeId, userId },
       select: { id: true, gcsPath: true },
     });
 
@@ -34,11 +43,13 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
 
     const { bucket, object } = parseGsPath(resume.gcsPath);
 
-    // Delete DB row first or storage first?
-    // We delete storage first so we don't orphan objects if delete fails.
+    // Delete storage first so we don't orphan objects if delete fails.
     await storage.bucket(bucket).file(object).delete({ ignoreNotFound: true });
 
-    await prisma.resume.delete({ where: { id: resumeId } });
+    const del = await prisma.resume.deleteMany({ where: { id: resumeId, userId } });
+    if (del.count !== 1) {
+      return NextResponse.json({ error: "Resume not found" }, { status: 404 });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Storage } from "@google-cloud/storage";
 import { z } from "zod";
+import { auth } from "@/auth";
 
 const storage = new Storage();
 const IdSchema = z.string().min(1);
@@ -17,14 +18,22 @@ function parseGsPath(gsPath: string) {
   return { bucket, object };
 }
 
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  try {
-    const { id } = await ctx.params;
-    const resumeId = IdSchema.parse(id);
+type Ctx = { params: { id: string } };
 
-    // NOTE: once auth exists, check resume.userId matches session user here.
-    const resume = await prisma.resume.findUnique({
-      where: { id: resumeId },
+async function getUserIdOrNull() {
+  const session = await auth();
+  return session?.user?.id ?? null;
+}
+
+export async function GET(req: Request, ctx: Ctx) {
+  const userId = await getUserIdOrNull();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    const resumeId = IdSchema.parse(ctx.params.id);
+
+    const resume = await prisma.resume.findFirst({
+      where: { id: resumeId, userId },
       select: { gcsPath: true, filename: true, mimeType: true },
     });
 
@@ -32,15 +41,22 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       return NextResponse.json({ error: "Resume not found" }, { status: 404 });
     }
 
+    const urlObj = new URL(req.url);
+    const download = urlObj.searchParams.get("download") === "1";
+
     const { bucket, object } = parseGsPath(resume.gcsPath);
     const file = storage.bucket(bucket).file(object);
+
+    const filename = resume.filename || "resume.pdf";
+    const disposition = download ? "attachment" : "inline";
 
     const [url] = await file.getSignedUrl({
       version: "v4",
       action: "read",
-      expires: Date.now() + 2 * 60 * 1000, // 2 minutes
+      // Longer-lived per your preference. You can tune later.
+      expires: Date.now() + 30 * 60 * 1000, // 30 minutes
       responseType: resume.mimeType || "application/pdf",
-      responseDisposition: `inline; filename="${resume.filename || "resume.pdf"}"`,
+      responseDisposition: `${disposition}; filename="${filename}"`,
     });
 
     return NextResponse.json({ url });

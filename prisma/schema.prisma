@@ -15,8 +15,72 @@ enum ApplicationStatus {
   WITHDRAWN
 }
 
+model User {
+  id            String    @id @default(cuid())
+  email         String?   @unique
+  name          String?
+  image         String?
+  emailVerified DateTime?
+
+  /// Credentials login (null for OAuth-only accounts)
+  passwordHash  String?
+
+  accounts      Account[]
+  sessions      Session[]
+
+  applications  Application[]
+  resumes       Resume[]
+  statusEvents  ApplicationStatusEvent[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+
+  refresh_token      String?
+  access_token       String?
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?
+  session_state      String?
+
+  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
 model Resume {
   id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   label     String
   gcsPath   String   @unique
   filename  String
@@ -25,10 +89,15 @@ model Resume {
   createdAt DateTime @default(now())
 
   applications Application[]
+
+  @@index([userId])
 }
 
 model Application {
   id String @id @default(cuid())
+
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   company   String
   roleTitle String
@@ -45,15 +114,21 @@ model Application {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([company])
-  @@index([status])
-  @@index([appliedAt])
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, appliedAt])
   @@index([resumeId])
+  @@index([company])
 }
 
 model ApplicationStatusEvent {
   id            String @id @default(cuid())
+
+  userId        String
+  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   fromStatus ApplicationStatus
   toStatus   ApplicationStatus
@@ -61,12 +136,11 @@ model ApplicationStatusEvent {
   occurredAt DateTime @default(now())
 
   voidedAt   DateTime?
-  voidedById String?   @unique
+  voidedById String?   // keep for future audit; do NOT make this unique
 
   createdAt DateTime @default(now())
 
-  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-
+  @@index([userId])
   @@index([applicationId, occurredAt])
   @@index([applicationId, createdAt])
 }

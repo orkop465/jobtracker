@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Storage } from "@google-cloud/storage";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/auth";
 
 function mustGetEnv(name: string) {
   const v = process.env[name];
@@ -10,17 +11,30 @@ function mustGetEnv(name: string) {
 
 const storage = new Storage();
 
+async function getUserIdOrNull() {
+  const session = await auth();
+  return session?.user?.id ?? null;
+}
+
 export async function GET() {
+  const userId = await getUserIdOrNull();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const items = await prisma.resume.findMany({
+    where: { userId },
     orderBy: { createdAt: "desc" },
     take: 50,
   });
+
   return NextResponse.json({ items });
 }
 
 export async function POST(req: Request) {
+  const userId = await getUserIdOrNull();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
-    const MAX_BYTES = 2 * 1024 * 1024;
+    const MAX_BYTES = 2 * 1024 * 1024; // 2MB
 
     const bucketName = mustGetEnv("RESUMES_BUCKET");
 
@@ -38,15 +52,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Only PDF files are allowed" }, { status: 400 });
     }
     if (file.size > MAX_BYTES) {
-      return NextResponse.json({ error: "File too large (max 10MB)" }, { status: 400 });
+      return NextResponse.json({ error: "File too large (max 2MB)" }, { status: 400 });
     }
 
     const bytes = Buffer.from(await file.arrayBuffer());
 
     const safeName = (file.name || "resume.pdf").replace(/[^\w.\-() ]+/g, "_");
-    const prefix = process.env.NODE_ENV === "production" ? "prod" : "dev";
-    const objectName = `resumes/${prefix}/${Date.now()}-${safeName}`;
+    const envPrefix = process.env.NODE_ENV === "production" ? "prod" : "dev";
 
+    // Future-proof naming: include userId so bucket listings are naturally tenant-separated.
+    const objectName = `resumes/${envPrefix}/${userId}/${Date.now()}-${safeName}`;
     const gcsPath = `gs://${bucketName}/${objectName}`;
 
     const bucket = storage.bucket(bucketName);
@@ -60,6 +75,7 @@ export async function POST(req: Request) {
 
     const created = await prisma.resume.create({
       data: {
+        userId,
         label,
         gcsPath,
         filename: safeName,
@@ -70,9 +86,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ item: created }, { status: 201 });
   } catch (err: any) {
-    return NextResponse.json(
-      { error: err?.message ?? String(err) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: err?.message ?? String(err) }, { status: 500 });
   }
 }

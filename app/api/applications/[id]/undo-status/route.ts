@@ -1,36 +1,53 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { auth } from "@/auth";
 
 const IdSchema = z.string().min(1);
 
-export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+type Ctx = { params: { id: string } };
+
+async function getUserIdOrNull() {
+  const session = await auth();
+  return session?.user?.id ?? null;
+}
+
+export async function POST(_req: Request, ctx: Ctx) {
+  const userId = await getUserIdOrNull();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
-    const { id } = await ctx.params;
-    const appId = IdSchema.parse(id);
+    const appId = IdSchema.parse(ctx.params.id);
+
+    // Ownership check up front for clearer 404 behavior
+    const owns = await prisma.application.findFirst({
+      where: { id: appId, userId },
+      select: { id: true },
+    });
+    if (!owns) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const result = await prisma.$transaction(async (tx) => {
       const last = await tx.applicationStatusEvent.findFirst({
-        where: { applicationId: appId, voidedAt: null },
+        where: { applicationId: appId, userId, voidedAt: null },
         orderBy: { createdAt: "desc" },
       });
 
       if (!last) return { ok: false as const, error: "No status changes to undo" };
 
-      await tx.applicationStatusEvent.update({
-        where: { id: last.id },
+      await tx.applicationStatusEvent.updateMany({
+        where: { id: last.id, userId },
         data: { voidedAt: new Date() },
       });
 
       const prev = await tx.applicationStatusEvent.findFirst({
-        where: { applicationId: appId, voidedAt: null },
+        where: { applicationId: appId, userId, voidedAt: null },
         orderBy: { createdAt: "desc" },
       });
 
       const newStatus = prev ? prev.toStatus : last.fromStatus;
 
-      await tx.application.update({
-        where: { id: appId },
+      await tx.application.updateMany({
+        where: { id: appId, userId },
         data: { status: newStatus },
       });
 
