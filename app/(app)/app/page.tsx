@@ -15,6 +15,7 @@ export default async function AppHome() {
         <Link href="/app/applications">Applications</Link>
         <Link href="/app/resumes">Resumes</Link>
         <Link href="/app/analytics">Analytics</Link>
+        <Link href="/app/account">Account</Link>
       </div>
     </main>
   );

@@ -2,12 +2,13 @@
 
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 
-export default function LoginPage() {
+function LoginContent() {
   const sp = useSearchParams();
   const callbackUrl = sp.get("callbackUrl") ?? "/app";
+  const oauthError = sp.get("error");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -39,6 +40,13 @@ export default function LoginPage() {
   return (
     <main style={{ maxWidth: 420, margin: "60px auto", padding: 16, fontFamily: "system-ui" }}>
       <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 12 }}>Log in</h1>
+
+      {oauthError === "OAuthAccountNotLinked" && (
+        <div style={{ color: "crimson", marginBottom: 12 }}>
+          This email is already registered with a different sign-in method. Sign in with your
+          existing method first, then link GitHub from Account settings.
+        </div>
+      )}
 
       <div style={{ display: "grid", gap: 8 }}>
         <button onClick={() => signIn("google", { callbackUrl })}>Continue with Google</button>
@@ -83,5 +91,13 @@ export default function LoginPage() {
         No account? <Link href="/register">Create one</Link>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<main style={{ maxWidth: 420, margin: "60px auto", padding: 16 }}>Loading...</main>}>
+      <LoginContent />
+    </Suspense>
   );
 }

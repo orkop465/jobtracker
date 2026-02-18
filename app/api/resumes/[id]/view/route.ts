@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Storage } from "@google-cloud/storage";
 import { z } from "zod";
@@ -18,19 +18,20 @@ function parseGsPath(gsPath: string) {
   return { bucket, object };
 }
 
-type Ctx = { params: { id: string } };
+type Ctx = { params: Promise<{ id: string }> };
 
 async function getUserIdOrNull() {
   const session = await auth();
   return session?.user?.id ?? null;
 }
 
-export async function GET(req: Request, ctx: Ctx) {
+export async function GET(req: NextRequest, ctx: Ctx) {
   const userId = await getUserIdOrNull();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const resumeId = IdSchema.parse(ctx.params.id);
+    const { id } = await ctx.params;
+    const resumeId = IdSchema.parse(id);
 
     const resume = await prisma.resume.findFirst({
       where: { id: resumeId, userId },

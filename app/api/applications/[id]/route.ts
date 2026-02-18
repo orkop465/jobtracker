@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { auth } from "@/auth";
@@ -13,22 +13,22 @@ const UpdateApplicationSchema = z
       .enum(["APPLIED", "SCREEN", "INTERVIEW", "OFFER", "REJECTED", "WITHDRAWN"])
       .optional(),
     appliedAt: z.string().datetime().optional(),
-    resumeId: z.string().optional().or(z.literal("")), // optional attach/detach
+    resumeId: z.string().optional().or(z.literal("")),
   })
   .strict();
-
-type Ctx = { params: { id: string } };
 
 async function getUserIdOrNull() {
   const session = await auth();
   return session?.user?.id ?? null;
 }
 
-export async function GET(_req: Request, ctx: Ctx) {
+type Ctx = { params: Promise<{ id: string }> };
+
+export async function GET(_req: NextRequest, ctx: Ctx) {
   const userId = await getUserIdOrNull();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const id = ctx.params.id;
+  const { id } = await ctx.params;
 
   const app = await prisma.application.findFirst({
     where: { id, userId },
@@ -39,18 +39,16 @@ export async function GET(_req: Request, ctx: Ctx) {
   return NextResponse.json({ item: app });
 }
 
-export async function PATCH(req: Request, ctx: Ctx) {
+export async function PATCH(req: NextRequest, ctx: Ctx) {
   const userId = await getUserIdOrNull();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const id = ctx.params.id;
+  const { id } = await ctx.params;
 
   try {
     const body = await req.json().catch(() => null);
     const parsed = UpdateApplicationSchema.parse(body);
 
-    // If resumeId is being set, enforce that the resume belongs to this user.
-    // Empty string means detach.
     let resumeIdToSet: string | null | undefined = undefined;
     if (typeof parsed.resumeId === "string") {
       const trimmed = parsed.resumeId.trim();
@@ -77,7 +75,6 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (typeof parsed.appliedAt === "string") data.appliedAt = new Date(parsed.appliedAt);
     if (resumeIdToSet !== undefined) data.resumeId = resumeIdToSet;
 
-    // updateMany enforces ownership (id alone is unique, but that would bypass userId).
     const result = await prisma.application.updateMany({
       where: { id, userId },
       data,
@@ -98,13 +95,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 }
 
-export async function DELETE(_req: Request, ctx: Ctx) {
+export async function DELETE(_req: NextRequest, ctx: Ctx) {
   const userId = await getUserIdOrNull();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const id = ctx.params.id;
+  const { id } = await ctx.params;
 
-  // deleteMany enforces ownership safely
   const result = await prisma.application.deleteMany({
     where: { id, userId },
   });

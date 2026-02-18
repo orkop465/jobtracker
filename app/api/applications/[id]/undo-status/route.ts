@@ -1,25 +1,24 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { auth } from "@/auth";
 
 const IdSchema = z.string().min(1);
-
-type Ctx = { params: { id: string } };
+type Ctx = { params: Promise<{ id: string }> };
 
 async function getUserIdOrNull() {
   const session = await auth();
   return session?.user?.id ?? null;
 }
 
-export async function POST(_req: Request, ctx: Ctx) {
+export async function POST(_req: NextRequest, ctx: Ctx) {
   const userId = await getUserIdOrNull();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const appId = IdSchema.parse(ctx.params.id);
+    const { id } = await ctx.params;
+    const appId = IdSchema.parse(id);
 
-    // Ownership check up front for clearer 404 behavior
     const owns = await prisma.application.findFirst({
       where: { id: appId, userId },
       select: { id: true },
