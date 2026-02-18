@@ -24,15 +24,22 @@ export async function GET() {
   const apps = await prisma.application.findMany({
     where: { userId },
     include: {
-      // This include is safe because the only way an application can reference a resume
-      // is via a resume row the user owns (we enforce that everywhere we set resumeId).
       resume: true,
     },
     orderBy: { appliedAt: "desc" },
     take: 50,
   });
 
-  return NextResponse.json({ items: apps });
+  const items = apps.map((app) => ({
+    ...app,
+    // Defense-in-depth: never return a resume if ownership is inconsistent.
+    resume:
+      app.resume && app.resume.userId === userId
+        ? app.resume
+        : null,
+  }));
+
+  return NextResponse.json({ items });
 }
 
 export async function POST(req: Request) {

@@ -10,7 +10,8 @@ import { prisma } from "@/lib/prisma";
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   trustHost: true,
-  session: { strategy: "database" },
+  // Credentials provider works reliably with JWT sessions.
+  session: { strategy: "jwt" },
   pages: { signIn: "/login" },
   providers: [
     Google,
@@ -47,8 +48,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async session({ session, user }) {
-      if (session.user) (session.user as any).id = user.id;
+    async jwt({ token, user }) {
+      if (user?.id) token.id = user.id;
+      return token;
+    },
+    async session({ session, token }) {
+      if (!session.user) return session;
+      if (token?.id) (session.user as any).id = String(token.id);
       return session;
     },
   },

@@ -36,7 +36,12 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   });
 
   if (!app) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ item: app });
+  const item = {
+    ...app,
+    // Defense-in-depth for legacy or corrupted cross-tenant resume links.
+    resume: app.resume && app.resume.userId === userId ? app.resume : null,
+  };
+  return NextResponse.json({ item });
 }
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
@@ -89,7 +94,17 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       include: { resume: true },
     });
 
-    return NextResponse.json({ item: updated });
+    const item = updated
+      ? {
+          ...updated,
+          resume:
+            updated.resume && updated.resume.userId === userId
+              ? updated.resume
+              : null,
+        }
+      : null;
+
+    return NextResponse.json({ item });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message ?? String(err) }, { status: 400 });
   }
