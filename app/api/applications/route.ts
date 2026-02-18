@@ -9,7 +9,18 @@ const CreateApplicationSchema = z.object({
   jobUrl: z.string().url().optional().or(z.literal("")),
   location: z.string().max(120).optional().or(z.literal("")),
   status: z
-    .enum(["APPLIED", "SCREEN", "INTERVIEW", "OFFER", "REJECTED", "WITHDRAWN"])
+    .enum([
+      "APPLIED",
+      "RECRUITER_SCREEN",
+      "OA",
+      "INTERVIEW_ROUND_1",
+      "INTERVIEW_ROUND_2",
+      "INTERVIEW_ROUND_3",
+      "OFFER",
+      "REJECTED",
+      "WITHDRAWN",
+      "GHOSTED",
+    ])
     .optional(),
   appliedAt: z.string().datetime().optional(),
 });

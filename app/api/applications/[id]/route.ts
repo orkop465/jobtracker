@@ -10,7 +10,18 @@ const UpdateApplicationSchema = z
     jobUrl: z.string().url().optional().or(z.literal("")),
     location: z.string().max(120).optional().or(z.literal("")),
     status: z
-      .enum(["APPLIED", "SCREEN", "INTERVIEW", "OFFER", "REJECTED", "WITHDRAWN"])
+      .enum([
+        "APPLIED",
+        "RECRUITER_SCREEN",
+        "OA",
+        "INTERVIEW_ROUND_1",
+        "INTERVIEW_ROUND_2",
+        "INTERVIEW_ROUND_3",
+        "OFFER",
+        "REJECTED",
+        "WITHDRAWN",
+        "GHOSTED",
+      ])
       .optional(),
     appliedAt: z.string().datetime().optional(),
     resumeId: z.string().optional().or(z.literal("")),
@@ -80,12 +91,40 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     if (typeof parsed.appliedAt === "string") data.appliedAt = new Date(parsed.appliedAt);
     if (resumeIdToSet !== undefined) data.resumeId = resumeIdToSet;
 
-    const result = await prisma.application.updateMany({
+    const current = await prisma.application.findFirst({
       where: { id, userId },
-      data,
+      select: { id: true, status: true },
+    });
+    if (!current) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const statusChanged =
+      typeof parsed.status === "string" && parsed.status !== current.status;
+
+    const result = await prisma.$transaction(async (tx) => {
+      const updated = await tx.application.updateMany({
+        where: { id, userId },
+        data,
+      });
+
+      if (updated.count !== 1) return { ok: false as const };
+
+      if (statusChanged) {
+        await tx.applicationStatusEvent.create({
+          data: {
+            userId,
+            applicationId: id,
+            fromStatus: current.status,
+            toStatus: parsed.status!,
+          },
+        });
+      }
+
+      return { ok: true as const };
     });
 
-    if (result.count !== 1) {
+    if (!result.ok) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 

@@ -328,11 +328,20 @@ export default function ApplicationsPage() {
                     <option value="APPLIED" style={{ background: "#111", color: "#fff" }}>
                       APPLIED
                     </option>
-                    <option value="SCREEN" style={{ background: "#111", color: "#fff" }}>
-                      SCREEN
+                    <option value="RECRUITER_SCREEN" style={{ background: "#111", color: "#fff" }}>
+                      RECRUITER_SCREEN
                     </option>
-                    <option value="INTERVIEW" style={{ background: "#111", color: "#fff" }}>
-                      INTERVIEW
+                    <option value="OA" style={{ background: "#111", color: "#fff" }}>
+                      OA
+                    </option>
+                    <option value="INTERVIEW_ROUND_1" style={{ background: "#111", color: "#fff" }}>
+                      INTERVIEW_ROUND_1
+                    </option>
+                    <option value="INTERVIEW_ROUND_2" style={{ background: "#111", color: "#fff" }}>
+                      INTERVIEW_ROUND_2
+                    </option>
+                    <option value="INTERVIEW_ROUND_3" style={{ background: "#111", color: "#fff" }}>
+                      INTERVIEW_ROUND_3
                     </option>
                     <option value="OFFER" style={{ background: "#111", color: "#fff" }}>
                       OFFER
@@ -342,6 +351,9 @@ export default function ApplicationsPage() {
                     </option>
                     <option value="WITHDRAWN" style={{ background: "#111", color: "#fff" }}>
                       WITHDRAWN
+                    </option>
+                    <option value="GHOSTED" style={{ background: "#111", color: "#fff" }}>
+                      GHOSTED
                     </option>
                   </select>
                 </label>

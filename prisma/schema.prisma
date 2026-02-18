@@ -8,11 +8,15 @@ datasource db {
 
 enum ApplicationStatus {
   APPLIED
-  SCREEN
-  INTERVIEW
+  RECRUITER_SCREEN
+  OA
+  INTERVIEW_ROUND_1
+  INTERVIEW_ROUND_2
+  INTERVIEW_ROUND_3
   OFFER
   REJECTED
   WITHDRAWN
+  GHOSTED
 }
 
 model User {
