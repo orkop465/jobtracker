@@ -14,8 +14,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
   providers: [
-    Google,
-    GitHub,
+    Google({
+      authorization: {
+        params: {
+          // Prevent silent reuse of a different Google browser session.
+          prompt: "select_account",
+        },
+      },
+    }),
+    GitHub({
+      authorization: {
+        params: {
+          // Force GitHub to re-auth and avoid silently reusing the wrong account session.
+          prompt: "login",
+        },
+      },
+    }),
     Credentials({
       name: "Email & Password",
       credentials: {

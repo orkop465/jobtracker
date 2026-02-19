@@ -50,7 +50,9 @@ function LoginContent() {
 
       <div style={{ display: "grid", gap: 8 }}>
         <button onClick={() => signIn("google", { callbackUrl })}>Continue with Google</button>
-        <button onClick={() => signIn("github", { callbackUrl })}>Continue with GitHub</button>
+        <button onClick={() => signIn("github", { callbackUrl, prompt: "login" })}>
+          Continue with GitHub
+        </button>
       </div>
 
       <hr style={{ margin: "16px 0" }} />

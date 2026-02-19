@@ -23,7 +23,7 @@ export default function LinkAccounts({ linkedProviders }: Props) {
 
       <button
         type="button"
-        onClick={() => signIn("github", { callbackUrl: "/app/account" })}
+        onClick={() => signIn("github", { callbackUrl: "/app/account", prompt: "login" })}
         disabled={hasGithub}
         style={{ padding: "8px 12px" }}
       >
