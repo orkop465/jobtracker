@@ -44,6 +44,7 @@ export default function ApplicationsPage() {
   const [roleTitle, setRoleTitle] = useState("");
   const [jobUrl, setJobUrl] = useState("");
   const [location, setLocation] = useState("");
+  const [resumeIdForCreate, setResumeIdForCreate] = useState("");
   const [resumes, setResumes] = useState<Resume[]>([]);
 
   const [openTimelineId, setOpenTimelineId] = useState<string | null>(null);
@@ -143,7 +144,13 @@ export default function ApplicationsPage() {
     const res = await fetch("/api/applications", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ company, roleTitle, jobUrl, location }),
+      body: JSON.stringify({
+        company,
+        roleTitle,
+        jobUrl,
+        location,
+        resumeId: resumeIdForCreate,
+      }),
     });
 
     const data = await safeJson(res);
@@ -157,6 +164,7 @@ export default function ApplicationsPage() {
     setRoleTitle("");
     setJobUrl("");
     setLocation("");
+    setResumeIdForCreate("");
     await load(false);
   }
 
@@ -283,6 +291,30 @@ export default function ApplicationsPage() {
           value={location}
           onChange={(e) => setLocation(e.target.value)}
         />
+        <label style={{ fontSize: 13, opacity: 0.85 }}>
+          Resume (optional){" "}
+          <select
+            value={resumeIdForCreate}
+            onChange={(e) => setResumeIdForCreate(e.target.value)}
+            style={{
+              marginLeft: 6,
+              background: "#111",
+              color: "#fff",
+              border: "1px solid #333",
+              borderRadius: 8,
+              padding: "6px 8px",
+            }}
+          >
+            <option value="" style={{ background: "#111", color: "#fff" }}>
+              None
+            </option>
+            {resumes.map((r) => (
+              <option key={r.id} value={r.id} style={{ background: "#111", color: "#fff" }}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <button type="submit" style={{ padding: "10px 12px" }}>
           Add application

@@ -23,6 +23,7 @@ const CreateApplicationSchema = z.object({
     ])
     .optional(),
   appliedAt: z.string().datetime().optional(),
+  resumeId: z.string().optional().or(z.literal("")),
 });
 
 export async function GET() {
@@ -63,6 +64,21 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => null);
     const parsed = CreateApplicationSchema.parse(body);
+    let resumeIdToSet: string | null = null;
+
+    if (typeof parsed.resumeId === "string") {
+      const trimmed = parsed.resumeId.trim();
+      if (trimmed) {
+        const resume = await prisma.resume.findFirst({
+          where: { id: trimmed, userId },
+          select: { id: true },
+        });
+        if (!resume) {
+          return NextResponse.json({ error: "Invalid resumeId" }, { status: 400 });
+        }
+        resumeIdToSet = resume.id;
+      }
+    }
 
     const created = await prisma.application.create({
       data: {
@@ -73,6 +89,7 @@ export async function POST(req: Request) {
         location: parsed.location ? parsed.location : null,
         status: parsed.status ?? "APPLIED",
         appliedAt: parsed.appliedAt ? new Date(parsed.appliedAt) : new Date(),
+        resumeId: resumeIdToSet,
       },
     });
 
