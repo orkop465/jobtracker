@@ -33,6 +33,33 @@ function maxStageRank(status: ApplicationStatus) {
   return 1;
 }
 
+function statusLabel(status: string) {
+  switch (status) {
+    case "APPLIED":
+      return "Applied";
+    case "RECRUITER_SCREEN":
+      return "Recruiter Screen";
+    case "OA":
+      return "OA";
+    case "INTERVIEW_ROUND_1":
+      return "Round 1";
+    case "INTERVIEW_ROUND_2":
+      return "Round 2";
+    case "INTERVIEW_ROUND_3":
+      return "Final Round";
+    case "OFFER":
+      return "Offer";
+    case "REJECTED":
+      return "Rejected";
+    case "WITHDRAWN":
+      return "Withdrawn";
+    case "GHOSTED":
+      return "Ghosted";
+    default:
+      return status;
+  }
+}
+
 export async function GET() {
   const session = await auth();
   const userId = session?.user?.id;
@@ -137,20 +164,31 @@ export async function GET() {
     groupedByStatus.map((g) => [g.status, g._count._all])
   );
 
-  const nodes: SankeyNode[] = Array.from(nodeSet).map((s) => ({ id: s, label: s }));
+  const nodes: SankeyNode[] = Array.from(nodeSet).map((s) => ({ id: s, label: statusLabel(s) }));
   const links: SankeyLink[] = Array.from(linkCounts.entries()).map(([k, value]) => {
     const [source, target] = k.split("=>");
     return { source, target, value };
   });
+  const sankeymaticText = links
+    .filter((l) => l.value > 0)
+    .map((l) => `${statusLabel(l.source)} [${l.value}] ${statusLabel(l.target)}`)
+    .join("\n");
+  const googleChartRows = links
+    .filter((l) => l.value > 0)
+    .map((l) => [statusLabel(l.source), statusLabel(l.target), l.value] as [string, string, number]);
 
   const timeInStage = Object.fromEntries(
     Array.from(timeBuckets.entries()).map(([status, bucket]) => [
-      status,
+      statusLabel(status),
       {
         avgHours: bucket.count > 0 ? bucket.totalMs / bucket.count / (1000 * 60 * 60) : 0,
         samples: bucket.count,
       },
     ])
+  );
+
+  const pipelineCountsLabeled = Object.fromEntries(
+    groupedByStatus.map((g) => [statusLabel(g.status), g._count._all])
   );
 
   return NextResponse.json({
@@ -167,7 +205,8 @@ export async function GET() {
       terminalOutcomes,
     },
     pipelineCounts,
+    pipelineCountsLabeled,
     timeInStage,
-    sankey: { nodes, links },
+    sankey: { nodes, links, sankeymaticText, googleChartRows },
   });
 }

@@ -17,10 +17,13 @@ type AnalyticsPayload = {
     terminalOutcomes: number;
   };
   pipelineCounts: Record<string, number>;
+  pipelineCountsLabeled: Record<string, number>;
   timeInStage: Record<string, { avgHours: number; samples: number }>;
   sankey: {
     nodes: Array<{ id: string; label: string }>;
     links: Array<{ source: string; target: string; value: number }>;
+    sankeymaticText: string;
+    googleChartRows: Array<[string, string, number]>;
   };
 };
 
@@ -28,6 +31,7 @@ export default function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsPayload | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [chartErr, setChartErr] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -47,6 +51,85 @@ export default function AnalyticsPage() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!data?.sankey.googleChartRows?.length) return;
+    const currentData = data;
+
+    let cancelled = false;
+
+    function draw() {
+      if (cancelled) return;
+      const googleRef = (window as any).google;
+      if (!googleRef?.visualization?.DataTable || !googleRef?.charts) return;
+
+      const container = document.getElementById("sankey-chart");
+      if (!container) return;
+
+      const table = new googleRef.visualization.DataTable();
+      table.addColumn("string", "From");
+      table.addColumn("string", "To");
+      table.addColumn("number", "Count");
+      table.addRows(currentData.sankey.googleChartRows);
+
+      const chart = new googleRef.visualization.Sankey(container);
+      chart.draw(table, {
+        width: 920,
+        height: 520,
+        tooltip: { trigger: "none" },
+        backgroundColor: "#ffffff",
+        sankey: {
+          node: {
+            width: 16,
+            nodePadding: 28,
+            label: {
+              color: "#111111",
+              fontSize: 18,
+              bold: true,
+            },
+          },
+          link: {
+            colorMode: "gradient",
+            color: { fillOpacity: 0.45 },
+          },
+        },
+      });
+    }
+
+    function ensureGoogleChartsLoaded() {
+      const existingGoogle = (window as any).google;
+      if (existingGoogle?.charts) {
+        existingGoogle.charts.load("current", { packages: ["sankey"] });
+        existingGoogle.charts.setOnLoadCallback(draw);
+        return;
+      }
+
+      const existingScript = document.getElementById("google-charts-loader");
+      if (existingScript) return;
+
+      const script = document.createElement("script");
+      script.id = "google-charts-loader";
+      script.src = "https://www.gstatic.com/charts/loader.js";
+      script.async = true;
+      script.onload = () => {
+        const g = (window as any).google;
+        if (!g?.charts) {
+          setChartErr("Failed to initialize Google Charts.");
+          return;
+        }
+        g.charts.load("current", { packages: ["sankey"] });
+        g.charts.setOnLoadCallback(draw);
+      };
+      script.onerror = () => setChartErr("Failed to load Google Charts script.");
+      document.head.appendChild(script);
+    }
+
+    ensureGoogleChartsLoaded();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [data]);
 
   return (
     <main style={{ maxWidth: 980, margin: "40px auto", padding: 16, fontFamily: "system-ui" }}>
@@ -76,7 +159,7 @@ export default function AnalyticsPage() {
           <section style={{ border: "1px solid #ddd", borderRadius: 10, padding: 12 }}>
             <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Pipeline Counts</h2>
             <pre style={{ whiteSpace: "pre-wrap" }}>
-              {JSON.stringify(data.pipelineCounts, null, 2)}
+              {JSON.stringify(data.pipelineCountsLabeled, null, 2)}
             </pre>
           </section>
 
@@ -88,10 +171,35 @@ export default function AnalyticsPage() {
           </section>
 
           <section style={{ border: "1px solid #ddd", borderRadius: 10, padding: 12 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Sankey Data</h2>
-            <pre style={{ whiteSpace: "pre-wrap" }}>
-              {JSON.stringify(data.sankey, null, 2)}
-            </pre>
+            <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Sankey Chart</h2>
+            {chartErr && <div style={{ color: "crimson", marginBottom: 8 }}>{chartErr}</div>}
+            {data.sankey.googleChartRows.length === 0 ? (
+              <div style={{ opacity: 0.8 }}>No transitions yet.</div>
+            ) : (
+              <div
+                id="sankey-chart"
+                style={{
+                  width: "100%",
+                  maxWidth: 940,
+                  minHeight: 520,
+                  background: "#ffffff",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 8,
+                  padding: 6,
+                }}
+              />
+            )}
+          </section>
+
+          <section style={{ border: "1px solid #ddd", borderRadius: 10, padding: 12 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
+              SankeyMATIC Export
+            </h2>
+            <textarea
+              readOnly
+              value={data.sankey.sankeymaticText}
+              style={{ width: "100%", minHeight: 180, fontFamily: "monospace" }}
+            />
           </section>
         </div>
       )}

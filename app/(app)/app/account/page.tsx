@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import LinkAccounts from "./link-accounts";
 
 export default async function AccountPage() {
   const session = await auth();
@@ -29,10 +28,12 @@ export default async function AccountPage() {
       </div>
 
       <div style={{ marginTop: 14 }}>
-        Linked providers: {linkedProviders.length ? linkedProviders.join(", ") : "none"}
+        Signed-in provider: {linkedProviders.length ? linkedProviders.join(", ") : "unknown"}
       </div>
-
-      <LinkAccounts linkedProviders={linkedProviders} />
+      <div style={{ marginTop: 10, opacity: 0.85 }}>
+        Provider linking is currently disabled. Google and GitHub are treated as separate
+        accounts.
+      </div>
 
       <div style={{ marginTop: 18 }}>
         <Link href="/app">Back to dashboard</Link>

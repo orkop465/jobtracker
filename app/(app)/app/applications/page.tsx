@@ -26,6 +26,24 @@ type StatusEvent = {
   occurredAt: string;
 };
 
+const STATUS_OPTIONS = [
+  { value: "APPLIED", label: "Applied" },
+  { value: "RECRUITER_SCREEN", label: "Recruiter Screen" },
+  { value: "OA", label: "OA" },
+  { value: "INTERVIEW_ROUND_1", label: "Round 1" },
+  { value: "INTERVIEW_ROUND_2", label: "Round 2" },
+  { value: "INTERVIEW_ROUND_3", label: "Final Round" },
+  { value: "OFFER", label: "Offer" },
+  { value: "REJECTED", label: "Rejected" },
+  { value: "WITHDRAWN", label: "Withdrawn" },
+  { value: "GHOSTED", label: "Ghosted" },
+] as const;
+
+function statusLabel(value: string) {
+  const found = STATUS_OPTIONS.find((s) => s.value === value);
+  return found?.label ?? value;
+}
+
 
 async function safeJson(res: Response) {
   try {
@@ -357,36 +375,15 @@ export default function ApplicationsPage() {
                       padding: "6px 8px",
                     }}
                   >
-                    <option value="APPLIED" style={{ background: "#111", color: "#fff" }}>
-                      APPLIED
-                    </option>
-                    <option value="RECRUITER_SCREEN" style={{ background: "#111", color: "#fff" }}>
-                      RECRUITER_SCREEN
-                    </option>
-                    <option value="OA" style={{ background: "#111", color: "#fff" }}>
-                      OA
-                    </option>
-                    <option value="INTERVIEW_ROUND_1" style={{ background: "#111", color: "#fff" }}>
-                      INTERVIEW_ROUND_1
-                    </option>
-                    <option value="INTERVIEW_ROUND_2" style={{ background: "#111", color: "#fff" }}>
-                      INTERVIEW_ROUND_2
-                    </option>
-                    <option value="INTERVIEW_ROUND_3" style={{ background: "#111", color: "#fff" }}>
-                      INTERVIEW_ROUND_3
-                    </option>
-                    <option value="OFFER" style={{ background: "#111", color: "#fff" }}>
-                      OFFER
-                    </option>
-                    <option value="REJECTED" style={{ background: "#111", color: "#fff" }}>
-                      REJECTED
-                    </option>
-                    <option value="WITHDRAWN" style={{ background: "#111", color: "#fff" }}>
-                      WITHDRAWN
-                    </option>
-                    <option value="GHOSTED" style={{ background: "#111", color: "#fff" }}>
-                      GHOSTED
-                    </option>
+                    {STATUS_OPTIONS.map((opt) => (
+                      <option
+                        key={opt.value}
+                        value={opt.value}
+                        style={{ background: "#111", color: "#fff" }}
+                      >
+                        {opt.label}
+                      </option>
+                    ))}
                   </select>
                 </label>
 
@@ -476,7 +473,7 @@ export default function ApplicationsPage() {
                           <span style={{ opacity: 0.75 }}>
                             {new Date(ev.occurredAt).toLocaleString()}:
                           </span>{" "}
-                          {ev.fromStatus} → {ev.toStatus}
+                          {statusLabel(ev.fromStatus)} {"->"} {statusLabel(ev.toStatus)}
                         </div>
                       ))}
                     </div>

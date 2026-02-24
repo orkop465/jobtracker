@@ -21,6 +21,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           prompt: "select_account",
         },
       },
+      profile(profile) {
+        return {
+          id: profile.sub,
+          name: profile.name,
+          email: `google:${profile.sub}@oauth.local`,
+          image: profile.picture,
+        };
+      },
     }),
     GitHub({
       authorization: {
@@ -28,6 +36,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           // Force GitHub to re-auth and avoid silently reusing the wrong account session.
           prompt: "login",
         },
+      },
+      profile(profile) {
+        const id = String(profile.id);
+        return {
+          id,
+          name: profile.name ?? profile.login ?? "GitHub User",
+          email: `github:${id}@oauth.local`,
+          image: profile.avatar_url,
+        };
       },
     }),
     Credentials({
