@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import SignOutButton from "./sign-out-button";
 
 export default async function AccountPage() {
   const session = await auth();
@@ -34,6 +35,8 @@ export default async function AccountPage() {
         Provider linking is currently disabled. Google and GitHub are treated as separate
         accounts.
       </div>
+
+      <SignOutButton />
 
       <div style={{ marginTop: 18 }}>
         <Link href="/app">Back to dashboard</Link>

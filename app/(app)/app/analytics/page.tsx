@@ -77,20 +77,30 @@ export default function AnalyticsPage() {
         width: 920,
         height: 520,
         tooltip: { trigger: "none" },
-        backgroundColor: "#ffffff",
+        backgroundColor: "#f3f3f3",
         sankey: {
           node: {
             width: 16,
             nodePadding: 28,
+            colors: [
+              "#b8aea8",
+              "#88bfc0",
+              "#5ca85a",
+              "#2f6aa3",
+              "#e14f56",
+              "#f39a2e",
+              "#d9bf3d",
+              "#a8739b",
+            ],
             label: {
               color: "#111111",
-              fontSize: 18,
+              fontSize: 16,
               bold: true,
             },
           },
           link: {
-            colorMode: "gradient",
-            color: { fillOpacity: 0.45 },
+            colorMode: "source",
+            color: { fillOpacity: 0.5 },
           },
         },
       });
@@ -182,7 +192,7 @@ export default function AnalyticsPage() {
                   width: "100%",
                   maxWidth: 940,
                   minHeight: 520,
-                  background: "#ffffff",
+                  background: "#f3f3f3",
                   border: "1px solid #e5e7eb",
                   borderRadius: 8,
                   padding: 6,
