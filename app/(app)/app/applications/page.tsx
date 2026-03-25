@@ -26,6 +26,32 @@ type StatusEvent = {
   occurredAt: string;
 };
 
+const PAGE_SIZE = 8;
+
+const panelStyle: React.CSSProperties = {
+  border: "1px solid #ddd",
+  borderRadius: 12,
+  padding: 16,
+  background: "#0f0f0f",
+};
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  background: "#111",
+  color: "#fff",
+  border: "1px solid #333",
+  borderRadius: 8,
+  padding: "10px 12px",
+};
+
+const selectStyle: React.CSSProperties = {
+  background: "#111",
+  color: "#fff",
+  border: "1px solid #333",
+  borderRadius: 8,
+  padding: "6px 8px",
+};
+
 const STATUS_OPTIONS = [
   { value: "APPLIED", label: "Applied" },
   { value: "RECRUITER_SCREEN", label: "Recruiter Screen" },
@@ -44,6 +70,21 @@ function statusLabel(value: string) {
   return found?.label ?? value;
 }
 
+function ErrorBanner({ message }: { message: string }) {
+  return (
+    <div
+      style={{
+        border: "1px solid #6b1d1d",
+        background: "#2a0f12",
+        color: "#ffb4b4",
+        borderRadius: 10,
+        padding: "10px 12px",
+      }}
+    >
+      {message}
+    </div>
+  );
+}
 
 async function safeJson(res: Response) {
   try {
@@ -57,6 +98,9 @@ export default function ApplicationsPage() {
   const [items, setItems] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [companyQuery, setCompanyQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const [company, setCompany] = useState("");
   const [roleTitle, setRoleTitle] = useState("");
@@ -67,9 +111,17 @@ export default function ApplicationsPage() {
 
   const [openTimelineId, setOpenTimelineId] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<Record<string, StatusEvent[]>>({});
-
-  // Prevent double-submits on the same row
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  const filteredItems = items.filter((item) => {
+    const matchesCompany =
+      companyQuery.trim().length === 0 ||
+      item.company.toLowerCase().includes(companyQuery.trim().toLowerCase());
+    const matchesStatus = statusFilter === "ALL" || item.status === statusFilter;
+    return matchesCompany && matchesStatus;
+  });
+
+  const visibleItems = filteredItems.slice(0, visibleCount);
 
   async function load(showSpinner = true) {
     if (showSpinner) setLoading(true);
@@ -99,7 +151,7 @@ export default function ApplicationsPage() {
       return;
     }
 
-    setResumes((data?.items ?? []).map((r: any) => ({ id: r.id, label: r.label })));
+    setResumes((data?.items ?? []).map((r: { id: string; label: string }) => ({ id: r.id, label: r.label })));
   }
 
   async function onDelete(id: string) {
@@ -117,7 +169,6 @@ export default function ApplicationsPage() {
       if (!res.ok) {
         setItems(prev);
         setErr(data?.error ?? `Delete failed (${res.status})`);
-        return;
       }
     } finally {
       setBusyId(null);
@@ -197,15 +248,16 @@ export default function ApplicationsPage() {
       cur.map((a) =>
         a.id === id
           ? {
-            ...a,
-            resumeId: resumeId ? resumeId : null,
-            resume: resumeId ? nextResume : null,
-          }
+              ...a,
+              resumeId: resumeId || null,
+              resume: resumeId ? nextResume : null,
+            }
           : a
       )
     );
 
     setBusyId(id);
+
     try {
       const res = await fetch(`/api/applications/${id}`, {
         method: "PATCH",
@@ -218,7 +270,6 @@ export default function ApplicationsPage() {
       if (!res.ok) {
         setItems(prev);
         setErr(data?.error ?? `Resume update failed (${res.status})`);
-        return;
       }
     } finally {
       setBusyId(null);
@@ -261,12 +312,8 @@ export default function ApplicationsPage() {
         return;
       }
 
-      // Update the application status in the list immediately
-      setItems((cur) =>
-        cur.map((a) => (a.id === appId ? { ...a, status: data.newStatus } : a))
-      );
+      setItems((cur) => cur.map((a) => (a.id === appId ? { ...a, status: data.newStatus } : a)));
 
-      // Refresh timeline UI if it's open
       if (openTimelineId === appId) {
         await loadTimeline(appId);
       }
@@ -280,54 +327,51 @@ export default function ApplicationsPage() {
     loadResumes();
   }, []);
 
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [companyQuery, statusFilter, items.length]);
+
   return (
     <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
-      <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 16 }}>
-        Applications
-      </h1>
+      <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 16 }}>Applications</h1>
 
-      <form onSubmit={onCreate} style={{ display: "grid", gap: 8, marginBottom: 24 }}>
+      <form onSubmit={onCreate} style={{ ...panelStyle, display: "grid", gap: 8, marginBottom: 18 }}>
         <input
           placeholder="Company (required)"
           value={company}
           onChange={(e) => setCompany(e.target.value)}
           required
+          style={inputStyle}
         />
         <input
           placeholder="Role title (required)"
           value={roleTitle}
           onChange={(e) => setRoleTitle(e.target.value)}
           required
+          style={inputStyle}
         />
         <input
           placeholder="Job URL (optional)"
           value={jobUrl}
           onChange={(e) => setJobUrl(e.target.value)}
+          style={inputStyle}
         />
         <input
           placeholder="Location (optional)"
           value={location}
           onChange={(e) => setLocation(e.target.value)}
+          style={inputStyle}
         />
         <label style={{ fontSize: 13, opacity: 0.85 }}>
-          Resume (optional){" "}
+          Resume{" "}
           <select
             value={resumeIdForCreate}
             onChange={(e) => setResumeIdForCreate(e.target.value)}
-            style={{
-              marginLeft: 6,
-              background: "#111",
-              color: "#fff",
-              border: "1px solid #333",
-              borderRadius: 8,
-              padding: "6px 8px",
-            }}
+            style={{ ...selectStyle, marginLeft: 6 }}
           >
-            <option value="" style={{ background: "#111", color: "#fff" }}>
-              None
-            </option>
+            <option value="">None</option>
             {resumes.map((r) => (
-              <option key={r.id} value={r.id} style={{ background: "#111", color: "#fff" }}>
+              <option key={r.id} value={r.id}>
                 {r.label}
               </option>
             ))}
@@ -338,25 +382,58 @@ export default function ApplicationsPage() {
           Add application
         </button>
 
-        {err && <div style={{ color: "crimson" }}>{err}</div>}
+        {err && <ErrorBanner message={err} />}
       </form>
 
+      <div style={{ ...panelStyle, display: "grid", gap: 12, marginBottom: 18 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ fontSize: 14, opacity: 0.82 }}>
+            Showing {Math.min(visibleItems.length, filteredItems.length)} of {filteredItems.length} matching
+            {filteredItems.length !== items.length ? ` (${items.length} total)` : ""}
+          </div>
+          <button type="button" onClick={() => load(false)} style={{ padding: "8px 10px" }}>
+            Refresh
+          </button>
+        </div>
+
+        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr" }}>
+          <input
+            placeholder="Search by company"
+            value={companyQuery}
+            onChange={(e) => setCompanyQuery(e.target.value)}
+            style={inputStyle}
+          />
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={inputStyle}>
+            <option value="ALL">All statuses</option>
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {loading ? (
-        <div>Loading…</div>
+        <div style={panelStyle}>Loading...</div>
+      ) : items.length === 0 ? (
+        <div style={panelStyle}>
+          <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}>No applications yet</div>
+          <div style={{ opacity: 0.8 }}>
+            Add your first application above to start tracking pipeline status, resumes, and analytics.
+          </div>
+        </div>
+      ) : filteredItems.length === 0 ? (
+        <div style={panelStyle}>
+          <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}>No matches</div>
+          <div style={{ opacity: 0.8 }}>Try a different company search or clear the status filter.</div>
+        </div>
       ) : (
         <div style={{ display: "grid", gap: 10 }}>
-          {items.map((a) => (
-            <div
-              key={a.id}
-              style={{
-                border: "1px solid #ddd",
-                borderRadius: 10,
-                padding: 12,
-                opacity: busyId === a.id ? 0.8 : 1,
-              }}
-            >
+          {visibleItems.map((a) => (
+            <div key={a.id} style={{ ...panelStyle, opacity: busyId === a.id ? 0.8 : 1 }}>
               <div style={{ fontWeight: 700 }}>
-                {a.company} — {a.roleTitle}
+                {a.company} - {a.roleTitle}
               </div>
 
               <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
@@ -366,21 +443,10 @@ export default function ApplicationsPage() {
                     value={a.status}
                     onChange={(e) => onStatusChange(a.id, e.target.value)}
                     disabled={busyId === a.id}
-                    style={{
-                      marginLeft: 6,
-                      background: "#111",
-                      color: "#fff",
-                      border: "1px solid #333",
-                      borderRadius: 8,
-                      padding: "6px 8px",
-                    }}
+                    style={{ ...selectStyle, marginLeft: 6 }}
                   >
                     {STATUS_OPTIONS.map((opt) => (
-                      <option
-                        key={opt.value}
-                        value={opt.value}
-                        style={{ background: "#111", color: "#fff" }}
-                      >
+                      <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>
                     ))}
@@ -417,7 +483,6 @@ export default function ApplicationsPage() {
                 >
                   Undo
                 </button>
-
               </div>
 
               <div style={{ marginTop: 10 }}>
@@ -427,24 +492,11 @@ export default function ApplicationsPage() {
                     value={a.resumeId ?? ""}
                     onChange={(e) => onResumeChange(a.id, e.target.value)}
                     disabled={busyId === a.id}
-                    style={{
-                      marginLeft: 6,
-                      background: "#111",
-                      color: "#fff",
-                      border: "1px solid #333",
-                      borderRadius: 8,
-                      padding: "6px 8px",
-                    }}
+                    style={{ ...selectStyle, marginLeft: 6 }}
                   >
-                    <option value="" style={{ background: "#111", color: "#fff" }}>
-                      None
-                    </option>
+                    <option value="">None</option>
                     {resumes.map((r) => (
-                      <option
-                        key={r.id}
-                        value={r.id}
-                        style={{ background: "#111", color: "#fff" }}
-                      >
+                      <option key={r.id} value={r.id}>
                         {r.label}
                       </option>
                     ))}
@@ -452,17 +504,13 @@ export default function ApplicationsPage() {
                 </label>
 
                 {a.resume?.label && (
-                  <div style={{ fontSize: 13, opacity: 0.8, marginTop: 6 }}>
-                    Selected: {a.resume.label}
-                  </div>
+                  <div style={{ fontSize: 13, opacity: 0.8, marginTop: 6 }}>Selected: {a.resume.label}</div>
                 )}
               </div>
 
               {openTimelineId === a.id && (
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #222" }}>
-                  <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 8 }}>
-                    Status timeline
-                  </div>
+                  <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 8 }}>Status timeline</div>
 
                   {(timeline[a.id] ?? []).length === 0 ? (
                     <div style={{ fontSize: 13, opacity: 0.7 }}>No status changes yet.</div>
@@ -470,9 +518,7 @@ export default function ApplicationsPage() {
                     <div style={{ display: "grid", gap: 6 }}>
                       {(timeline[a.id] ?? []).map((ev) => (
                         <div key={ev.id} style={{ fontSize: 13, opacity: 0.9 }}>
-                          <span style={{ opacity: 0.75 }}>
-                            {new Date(ev.occurredAt).toLocaleString()}:
-                          </span>{" "}
+                          <span style={{ opacity: 0.75 }}>{new Date(ev.occurredAt).toLocaleString()}:</span>{" "}
                           {statusLabel(ev.fromStatus)} {"->"} {statusLabel(ev.toStatus)}
                         </div>
                       ))}
@@ -480,7 +526,6 @@ export default function ApplicationsPage() {
                   )}
                 </div>
               )}
-
 
               {a.location && <div>Location: {a.location}</div>}
               {a.jobUrl && (
@@ -492,6 +537,16 @@ export default function ApplicationsPage() {
               )}
             </div>
           ))}
+
+          {filteredItems.length > visibleItems.length && (
+            <button
+              type="button"
+              onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
+              style={{ padding: "10px 12px", justifySelf: "center", minWidth: 160 }}
+            >
+              Load more
+            </button>
+          )}
         </div>
       )}
     </div>
