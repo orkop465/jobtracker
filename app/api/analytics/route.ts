@@ -2,73 +2,37 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { ApplicationStatus } from "@prisma/client";
+import {
+  statusLabel,
+  sourceLabel,
+  isScreenStatus,
+  isInterviewStatus,
+  isOfferStatus,
+  isTerminalStatus,
+  maxStageRank,
+} from "@/lib/constants";
 
 type SankeyNode = { id: string; label: string };
 type SankeyLink = { source: string; target: string; value: number };
-
-function isScreenStatus(status: ApplicationStatus) {
-  return status === "RECRUITER_SCREEN" || status === "OA";
-}
-
-function isInterviewStatus(status: ApplicationStatus) {
-  return (
-    status === "INTERVIEW_ROUND_1" ||
-    status === "INTERVIEW_ROUND_2" ||
-    status === "INTERVIEW_ROUND_3"
-  );
-}
-
-function isOfferStatus(status: ApplicationStatus) {
-  return status === "OFFER";
-}
-
-function isTerminalStatus(status: ApplicationStatus) {
-  return status === "REJECTED" || status === "WITHDRAWN" || status === "GHOSTED";
-}
-
-function maxStageRank(status: ApplicationStatus) {
-  if (isOfferStatus(status)) return 4;
-  if (isInterviewStatus(status)) return 3;
-  if (isScreenStatus(status)) return 2;
-  return 1;
-}
-
-function statusLabel(status: string) {
-  switch (status) {
-    case "APPLIED":
-      return "Applied";
-    case "RECRUITER_SCREEN":
-      return "Recruiter Screen";
-    case "OA":
-      return "OA";
-    case "INTERVIEW_ROUND_1":
-      return "Round 1";
-    case "INTERVIEW_ROUND_2":
-      return "Round 2";
-    case "INTERVIEW_ROUND_3":
-      return "Final Round";
-    case "OFFER":
-      return "Offer";
-    case "REJECTED":
-      return "Rejected";
-    case "WITHDRAWN":
-      return "Withdrawn";
-    case "GHOSTED":
-      return "Ghosted";
-    default:
-      return status;
-  }
-}
 
 export async function GET() {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const [applications, events, groupedByStatus] = await Promise.all([
+  const now = new Date();
+  const twelveWeeksAgo = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000);
+
+  const [applications, events, groupedByStatus, resumes] = await Promise.all([
     prisma.application.findMany({
       where: { userId },
-      select: { id: true, status: true, appliedAt: true },
+      select: {
+        id: true,
+        status: true,
+        appliedAt: true,
+        source: true,
+        resumeId: true,
+      },
     }),
     prisma.applicationStatusEvent.findMany({
       where: { userId, voidedAt: null },
@@ -85,9 +49,14 @@ export async function GET() {
       where: { userId },
       _count: { _all: true },
     }),
+    prisma.resume.findMany({
+      where: { userId },
+      select: { id: true, label: true },
+    }),
   ]);
 
   const appCount = applications.length;
+  const resumeMap = new Map(resumes.map((r) => [r.id, r.label]));
 
   const byApp = new Map<string, Array<(typeof events)[number]>>();
   for (const ev of events) {
@@ -106,10 +75,18 @@ export async function GET() {
   const linkCounts = new Map<string, number>();
   const nodeSet = new Set<string>();
 
+  // Per-app tracking for source/resume stats
+  const appMaxRanks = new Map<string, number>();
+  const appResponded = new Map<string, boolean>();
+
+  // Time-to-outcome
+  const daysToOffer: number[] = [];
+  const daysToRejection: number[] = [];
+
   for (const app of applications) {
     const appEvents = byApp.get(app.id) ?? [];
-    let appMaxRank = maxStageRank(app.status);
-    let appResponded = isScreenStatus(app.status) || isInterviewStatus(app.status) || isOfferStatus(app.status);
+    let appRank = maxStageRank(app.status);
+    let responded = isScreenStatus(app.status) || isInterviewStatus(app.status) || isOfferStatus(app.status);
 
     if (isTerminalStatus(app.status)) terminalOutcomes += 1;
 
@@ -134,10 +111,10 @@ export async function GET() {
       linkCounts.set(linkKey, (linkCounts.get(linkKey) ?? 0) + 1);
 
       const rank = maxStageRank(ev.toStatus);
-      if (rank > appMaxRank) appMaxRank = rank;
+      if (rank > appRank) appRank = rank;
 
       if (isScreenStatus(ev.toStatus) || isInterviewStatus(ev.toStatus) || isOfferStatus(ev.toStatus)) {
-        appResponded = true;
+        responded = true;
       }
 
       if (i < appEvents.length - 1) {
@@ -152,10 +129,25 @@ export async function GET() {
       }
     }
 
-    if (appResponded) respondedCount += 1;
-    if (appMaxRank >= 2) reachedScreen += 1;
-    if (appMaxRank >= 3) reachedInterview += 1;
-    if (appMaxRank >= 4) reachedOffer += 1;
+    if (responded) respondedCount += 1;
+    if (appRank >= 2) reachedScreen += 1;
+    if (appRank >= 3) reachedInterview += 1;
+    if (appRank >= 4) reachedOffer += 1;
+
+    appMaxRanks.set(app.id, appRank);
+    appResponded.set(app.id, responded);
+
+    // Time to outcome
+    if (app.status === "OFFER" && appEvents.length > 0) {
+      const lastEvent = appEvents[appEvents.length - 1];
+      const days = (lastEvent.occurredAt.getTime() - new Date(app.appliedAt).getTime()) / (1000 * 60 * 60 * 24);
+      if (days >= 0) daysToOffer.push(days);
+    }
+    if (app.status === "REJECTED" && appEvents.length > 0) {
+      const lastEvent = appEvents[appEvents.length - 1];
+      const days = (lastEvent.occurredAt.getTime() - new Date(app.appliedAt).getTime()) / (1000 * 60 * 60 * 24);
+      if (days >= 0) daysToRejection.push(days);
+    }
   }
 
   const responseRate = appCount > 0 ? respondedCount / appCount : 0;
@@ -191,6 +183,100 @@ export async function GET() {
     groupedByStatus.map((g) => [statusLabel(g.status), g._count._all])
   );
 
+  // --- NEW: Source effectiveness ---
+  const sourceGroups = new Map<string, { total: number; responded: number; interviewed: number; offered: number }>();
+  for (const app of applications) {
+    const src = app.source ?? "UNKNOWN";
+    const group = sourceGroups.get(src) ?? { total: 0, responded: 0, interviewed: 0, offered: 0 };
+    group.total += 1;
+    const rank = appMaxRanks.get(app.id) ?? 1;
+    if (appResponded.get(app.id)) group.responded += 1;
+    if (rank >= 3) group.interviewed += 1;
+    if (rank >= 4) group.offered += 1;
+    sourceGroups.set(src, group);
+  }
+
+  const sourceStats = Object.fromEntries(
+    Array.from(sourceGroups.entries())
+      .filter(([, g]) => g.total > 0)
+      .map(([src, g]) => [
+        src === "UNKNOWN" ? "Unknown" : sourceLabel(src),
+        {
+          total: g.total,
+          responded: g.responded,
+          interviewed: g.interviewed,
+          offered: g.offered,
+          responseRate: g.total > 0 ? g.responded / g.total : 0,
+        },
+      ])
+  );
+
+  // --- NEW: Resume performance ---
+  const resumeGroups = new Map<string, { total: number; responded: number }>();
+  for (const app of applications) {
+    if (!app.resumeId) continue;
+    const group = resumeGroups.get(app.resumeId) ?? { total: 0, responded: 0 };
+    group.total += 1;
+    if (appResponded.get(app.id)) group.responded += 1;
+    resumeGroups.set(app.resumeId, group);
+  }
+
+  const resumeStats = Array.from(resumeGroups.entries())
+    .map(([resumeId, g]) => ({
+      resumeId,
+      resumeLabel: resumeMap.get(resumeId) ?? "Unknown",
+      total: g.total,
+      responded: g.responded,
+      responseRate: g.total > 0 ? g.responded / g.total : 0,
+    }))
+    .sort((a, b) => b.responseRate - a.responseRate);
+
+  // --- NEW: Application velocity (12 weeks) ---
+  const velocity: { weekLabel: string; count: number }[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const weekStart = new Date(now.getTime() - (i + 1) * 7 * 24 * 60 * 60 * 1000);
+    const weekEnd = new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000);
+    const count = applications.filter(
+      (a) => new Date(a.appliedAt) >= weekStart && new Date(a.appliedAt) < weekEnd
+    ).length;
+    const label = weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    velocity.push({ weekLabel: label, count });
+  }
+
+  // --- NEW: Conversion rates ---
+  const conversionRates = [
+    { from: "Applied", to: "Screen", numerator: reachedScreen, denominator: appCount },
+    { from: "Screen", to: "Interview", numerator: reachedInterview, denominator: reachedScreen },
+    { from: "Interview", to: "Offer", numerator: reachedOffer, denominator: reachedInterview },
+  ]
+    .filter((c) => c.denominator > 0)
+    .map((c) => ({
+      ...c,
+      rate: c.numerator / c.denominator,
+    }));
+
+  // --- NEW: Time to outcome ---
+  function median(arr: number[]) {
+    if (arr.length === 0) return null;
+    const sorted = [...arr].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+
+  function avg(arr: number[]) {
+    if (arr.length === 0) return null;
+    return arr.reduce((s, v) => s + v, 0) / arr.length;
+  }
+
+  const timeToOutcome = {
+    avgDaysToOffer: avg(daysToOffer) != null ? Math.round(avg(daysToOffer)!) : null,
+    avgDaysToRejection: avg(daysToRejection) != null ? Math.round(avg(daysToRejection)!) : null,
+    medianDaysToOffer: median(daysToOffer) != null ? Math.round(median(daysToOffer)!) : null,
+    medianDaysToRejection: median(daysToRejection) != null ? Math.round(median(daysToRejection)!) : null,
+    offerSamples: daysToOffer.length,
+    rejectionSamples: daysToRejection.length,
+  };
+
   return NextResponse.json({
     summary: {
       totalApplications: appCount,
@@ -208,5 +294,10 @@ export async function GET() {
     pipelineCountsLabeled,
     timeInStage,
     sankey: { nodes, links, sankeymaticText, googleChartRows },
+    sourceStats,
+    resumeStats,
+    velocity,
+    conversionRates,
+    timeToOutcome,
   });
 }

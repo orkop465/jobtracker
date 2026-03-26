@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ErrorBanner } from "@/components/ui/error-banner";
+import { useToast } from "@/components/ui/toast";
 
 type Resume = {
   id: string;
@@ -12,47 +17,12 @@ type Resume = {
   gcsPath: string;
 };
 
-const panelStyle: React.CSSProperties = {
-  border: "1px solid #333",
-  borderRadius: 12,
-  padding: 16,
-  background: "#0f0f0f",
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#111",
-  color: "#fff",
-  border: "1px solid #333",
-  borderRadius: 8,
-  padding: "10px 12px",
-};
-
-function ErrorBanner({ message }: { message: string }) {
-  return (
-    <div
-      style={{
-        border: "1px solid #6b1d1d",
-        background: "#2a0f12",
-        color: "#ffb4b4",
-        borderRadius: 10,
-        padding: "10px 12px",
-      }}
-    >
-      {message}
-    </div>
-  );
-}
-
 async function safeJson(res: Response) {
-  try {
-    return await res.json();
-  } catch {
-    return null;
-  }
+  try { return await res.json(); } catch { return null; }
 }
 
 export default function ResumesPage() {
+  const { toast } = useToast();
   const [items, setItems] = useState<Resume[]>([]);
   const [label, setLabel] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -63,65 +33,42 @@ export default function ResumesPage() {
   async function load(showSpinner = true) {
     if (showSpinner) setLoading(true);
     setErr(null);
-
     const res = await fetch("/api/resumes", { cache: "no-store" });
     const data = await safeJson(res);
-
     if (!res.ok) {
       setItems([]);
       setErr(data?.error ?? `Failed to load resumes (${res.status})`);
-      if (showSpinner) setLoading(false);
-      return;
+    } else {
+      setItems(data?.items ?? []);
     }
-
-    setItems(data?.items ?? []);
     if (showSpinner) setLoading(false);
   }
 
-  useEffect(() => {
-    load(true);
-  }, []);
+  useEffect(() => { load(true); }, []);
 
-  async function onUpload(e: React.SyntheticEvent) {
-    const MAX_BYTES = 2 * 1024 * 1024;
-
+  async function onUpload(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
 
-    if (!label.trim()) {
-      setErr("Label is required");
-      return;
-    }
-    if (!file) {
-      setErr("PDF file is required");
-      return;
-    }
-    if (file.type !== "application/pdf") {
-      setErr("Only PDF files are allowed");
-      return;
-    }
-    if (file.size > MAX_BYTES) {
-      setErr("PDF must be 2MB or smaller");
-      return;
-    }
+    if (!label.trim()) { setErr("Label is required"); return; }
+    if (!file) { setErr("PDF file is required"); return; }
+    if (file.type !== "application/pdf") { setErr("Only PDF files are allowed"); return; }
+    if (file.size > 2 * 1024 * 1024) { setErr("PDF must be 2MB or smaller"); return; }
 
     setBusy(true);
-
     try {
       const fd = new FormData();
       fd.append("label", label.trim());
       fd.append("file", file);
-
       const res = await fetch("/api/resumes", { method: "POST", body: fd });
       const data = await safeJson(res);
-
-      if (!res.ok) {
-        setErr(data?.error ?? "Upload failed");
-        return;
-      }
-
+      if (!res.ok) { setErr(data?.error ?? "Upload failed"); return; }
+      toast("Resume uploaded", "success");
       setLabel("");
       setFile(null);
+      // Reset the file input
+      const fileInput = document.getElementById("resume-file-input") as HTMLInputElement;
+      if (fileInput) fileInput.value = "";
       await load(false);
     } finally {
       setBusy(false);
@@ -130,124 +77,85 @@ export default function ResumesPage() {
 
   async function onView(resumeId: string) {
     setErr(null);
-
     const res = await fetch(`/api/resumes/${resumeId}/view`, { cache: "no-store" });
     const data = await safeJson(res);
-
-    if (!res.ok) {
-      setErr(data?.error ?? `View failed (${res.status})`);
-      return;
-    }
-
-    if (!data?.url) {
-      setErr("View failed: missing signed URL");
-      return;
-    }
-
+    if (!res.ok) { toast(data?.error ?? "View failed", "error"); return; }
+    if (!data?.url) { toast("View failed: missing signed URL", "error"); return; }
     window.open(data.url, "_blank", "noopener,noreferrer");
   }
 
   async function onDelete(resumeId: string) {
-    setErr(null);
-
     const prev = items;
     setItems((cur) => cur.filter((r) => r.id !== resumeId));
-
     const res = await fetch(`/api/resumes/${resumeId}`, { method: "DELETE" });
     const data = await safeJson(res);
-
     if (!res.ok) {
       setItems(prev);
-      setErr(data?.error ?? `Delete failed (${res.status})`);
+      toast(data?.error ?? "Delete failed", "error");
+    } else {
+      toast("Resume deleted", "success");
     }
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
-      <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 16 }}>Resumes</h1>
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-xl font-bold text-text-primary tracking-tight">Resumes</h1>
+        <p className="text-sm text-text-muted mt-0.5">{items.length} resume{items.length !== 1 ? "s" : ""} uploaded</p>
+      </div>
 
-      <form onSubmit={onUpload} style={{ ...panelStyle, display: "grid", gap: 8, marginBottom: 20 }}>
-        <input
-          placeholder="Label (ex: SDE general v3)"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          style={inputStyle}
-        />
-        <input
-          type="file"
-          accept="application/pdf"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          style={inputStyle}
-        />
-        <div style={{ fontSize: 13, opacity: 0.78 }}>Upload a PDF up to 2 MB. Keep labels clear so application history stays readable.</div>
-        <button type="submit" disabled={busy} style={{ padding: "10px 12px" }}>
-          {busy ? "Uploading..." : "Upload PDF"}
-        </button>
-
-        {err && <ErrorBanner message={err} />}
-      </form>
-
-      {loading ? (
-        <div style={panelStyle}>Loading...</div>
-      ) : items.length === 0 ? (
-        <div style={panelStyle}>
-          <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}>No resumes yet</div>
-          <div style={{ opacity: 0.8 }}>
-            Upload one PDF to start attaching the right resume version to each application.
+      {/* Upload form */}
+      <Card>
+        <form onSubmit={onUpload} className="space-y-3">
+          <Input
+            label="Label"
+            placeholder="e.g. SDE General v3"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+          />
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-text-secondary tracking-wide uppercase">PDF File</label>
+            <input
+              id="resume-file-input"
+              type="file"
+              accept="application/pdf"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              className="text-sm text-text-secondary file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border file:border-border file:text-sm file:font-medium file:bg-surface-2 file:text-text-primary hover:file:bg-surface-3 file:cursor-pointer file:transition-colors"
+            />
+            <p className="text-xs text-text-muted">PDF only, max 2 MB</p>
           </div>
+          <Button type="submit" variant="primary" loading={busy}>
+            Upload Resume
+          </Button>
+          {err && <ErrorBanner message={err} onDismiss={() => setErr(null)} />}
+        </form>
+      </Card>
+
+      {/* Resume list */}
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-text-muted text-sm animate-pulse">Loading resumes...</div>
         </div>
+      ) : items.length === 0 ? (
+        <Card className="text-center py-12">
+          <p className="text-lg font-semibold text-text-primary mb-2">No resumes yet</p>
+          <p className="text-sm text-text-muted">Upload a PDF to start attaching resume versions to applications.</p>
+        </Card>
       ) : (
-        <div style={{ display: "grid", gap: 12 }}>
+        <div className="space-y-2">
           {items.map((r) => (
-            <div
-              key={r.id}
-              style={{
-                ...panelStyle,
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: 16,
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 700, marginBottom: 4 }}>{r.label}</div>
-                <div style={{ fontSize: 13, opacity: 0.8 }}>
-                  {r.filename} - {(r.sizeBytes / 1024).toFixed(1)} KB - {new Date(r.createdAt).toLocaleString()}
-                </div>
+            <Card key={r.id} padding="sm" className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="font-semibold text-text-primary text-sm truncate">{r.label}</p>
+                <p className="text-xs text-text-muted mt-0.5">
+                  {r.filename} &middot; {(r.sizeBytes / 1024).toFixed(0)} KB &middot; {new Date(r.createdAt).toLocaleDateString()}
+                </p>
               </div>
-
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  type="button"
-                  onClick={() => onView(r.id)}
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: 6,
-                    border: "1px solid #444",
-                    background: "#111",
-                    color: "#fff",
-                    cursor: "pointer",
-                  }}
-                >
-                  View
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => onDelete(r.id)}
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: 6,
-                    border: "1px solid #552222",
-                    background: "#220000",
-                    color: "#ffb3b3",
-                    cursor: "pointer",
-                  }}
-                >
-                  Delete
-                </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button variant="secondary" size="sm" onClick={() => onView(r.id)}>View</Button>
+                <Button variant="danger" size="sm" onClick={() => onDelete(r.id)}>Delete</Button>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}

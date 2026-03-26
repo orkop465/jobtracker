@@ -25,8 +25,36 @@ const UpdateApplicationSchema = z
       .optional(),
     appliedAt: z.string().datetime().optional(),
     resumeId: z.string().optional().or(z.literal("")),
+    salaryMin: z.number().int().min(0).optional().nullable(),
+    salaryMax: z.number().int().min(0).optional().nullable(),
+    currency: z.string().max(3).optional().or(z.literal("")),
+    contactName: z.string().max(120).optional().or(z.literal("")),
+    contactEmail: z.string().email().optional().or(z.literal("")),
+    contactLinkedIn: z.string().max(500).optional().or(z.literal("")),
+    notes: z.string().max(10000).optional().or(z.literal("")),
+    source: z
+      .enum([
+        "LINKEDIN",
+        "INDEED",
+        "GLASSDOOR",
+        "COMPANY_WEBSITE",
+        "REFERRAL",
+        "RECRUITER_OUTREACH",
+        "JOB_BOARD",
+        "CAREER_FAIR",
+        "OTHER",
+      ])
+      .optional()
+      .nullable(),
+    jobDescription: z.string().max(50000).optional().or(z.literal("")),
+    priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional().nullable(),
+    nextFollowUp: z.string().datetime().optional().or(z.literal("")).nullable(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (d) => !(d.salaryMin != null && d.salaryMax != null && d.salaryMin > d.salaryMax),
+    { message: "salaryMin must not exceed salaryMax", path: ["salaryMin"] }
+  );
 
 async function getUserIdOrNull() {
   const session = await auth();
@@ -85,11 +113,25 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     const data: Record<string, any> = {};
     if (typeof parsed.company === "string") data.company = parsed.company.trim();
     if (typeof parsed.roleTitle === "string") data.roleTitle = parsed.roleTitle.trim();
-    if (typeof parsed.jobUrl === "string") data.jobUrl = parsed.jobUrl ? parsed.jobUrl : null;
-    if (typeof parsed.location === "string") data.location = parsed.location ? parsed.location : null;
+    if (typeof parsed.jobUrl === "string") data.jobUrl = parsed.jobUrl || null;
+    if (typeof parsed.location === "string") data.location = parsed.location || null;
     if (typeof parsed.status === "string") data.status = parsed.status;
     if (typeof parsed.appliedAt === "string") data.appliedAt = new Date(parsed.appliedAt);
     if (resumeIdToSet !== undefined) data.resumeId = resumeIdToSet;
+
+    if (parsed.salaryMin !== undefined) data.salaryMin = parsed.salaryMin;
+    if (parsed.salaryMax !== undefined) data.salaryMax = parsed.salaryMax;
+    if (typeof parsed.currency === "string") data.currency = parsed.currency || null;
+    if (typeof parsed.contactName === "string") data.contactName = parsed.contactName.trim() || null;
+    if (typeof parsed.contactEmail === "string") data.contactEmail = parsed.contactEmail.trim() || null;
+    if (typeof parsed.contactLinkedIn === "string") data.contactLinkedIn = parsed.contactLinkedIn.trim() || null;
+    if (typeof parsed.notes === "string") data.notes = parsed.notes.trim() || null;
+    if (parsed.source !== undefined) data.source = parsed.source;
+    if (typeof parsed.jobDescription === "string") data.jobDescription = parsed.jobDescription.trim() || null;
+    if (parsed.priority !== undefined) data.priority = parsed.priority;
+    if (parsed.nextFollowUp !== undefined) {
+      data.nextFollowUp = parsed.nextFollowUp ? new Date(parsed.nextFollowUp) : null;
+    }
 
     const current = await prisma.application.findFirst({
       where: { id, userId },

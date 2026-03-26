@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import SignOutButton from "./sign-out-button";
@@ -9,9 +8,7 @@ export default async function AccountPage() {
 
   if (!userId) {
     return (
-      <main style={{ maxWidth: 900, margin: "40px auto", padding: 16, fontFamily: "system-ui" }}>
-        <div>Unauthorized</div>
-      </main>
+      <div className="text-center py-20 text-text-muted">Unauthorized</div>
     );
   }
 
@@ -22,25 +19,29 @@ export default async function AccountPage() {
   const linkedProviders = accounts.map((a) => a.provider);
 
   return (
-    <main style={{ maxWidth: 900, margin: "40px auto", padding: 16, fontFamily: "system-ui" }}>
-      <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>Account</h1>
-      <div style={{ opacity: 0.85 }}>
-        Signed in as <b>{session.user?.email ?? "unknown"}</b>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-bold text-text-primary tracking-tight">Account</h1>
+        <p className="text-sm text-text-muted mt-1">
+          Signed in as <span className="text-text-primary font-medium">{session.user?.email ?? "unknown"}</span>
+        </p>
       </div>
 
-      <div style={{ marginTop: 14 }}>
-        Signed-in provider: {linkedProviders.length ? linkedProviders.join(", ") : "unknown"}
-      </div>
-      <div style={{ marginTop: 10, opacity: 0.85 }}>
-        Provider linking is currently disabled. Google and GitHub are treated as separate
-        accounts.
-      </div>
+      <div className="bg-surface-1 border border-border rounded-xl p-5 space-y-4">
+        <div>
+          <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Auth Provider</p>
+          <p className="text-sm text-text-primary capitalize">
+            {linkedProviders.length ? linkedProviders.join(", ") : "Credentials"}
+          </p>
+        </div>
 
-      <SignOutButton />
-
-      <div style={{ marginTop: 18 }}>
-        <Link href="/app">Back to dashboard</Link>
+        <div className="border-t border-border pt-4">
+          <p className="text-xs text-text-muted mb-3">
+            Provider linking is currently disabled. Google and GitHub are treated as separate accounts.
+          </p>
+          <SignOutButton />
+        </div>
       </div>
-    </main>
+    </div>
   );
 }

@@ -1,11 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Badge, statusToBadgeVariant, priorityToBadgeVariant } from "@/components/ui/badge";
+import { ErrorBanner } from "@/components/ui/error-banner";
+import { useToast } from "@/components/ui/toast";
+import { ApplicationDetailDrawer } from "@/components/application-detail-drawer";
+import {
+  STATUS_OPTIONS,
+  SOURCE_OPTIONS,
+  PRIORITY_OPTIONS,
+  statusLabel,
+  sourceLabel,
+  priorityLabel,
+} from "@/lib/constants";
 
-type Resume = {
-  id: string;
-  label: string;
-};
+type Resume = { id: string; label: string };
 
 type Application = {
   id: string;
@@ -17,74 +30,20 @@ type Application = {
   appliedAt: string;
   resumeId: string | null;
   resume: Resume | null;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  currency: string | null;
+  contactName: string | null;
+  contactEmail: string | null;
+  contactLinkedIn: string | null;
+  notes: string | null;
+  source: string | null;
+  jobDescription: string | null;
+  priority: string | null;
+  nextFollowUp: string | null;
 };
 
-type StatusEvent = {
-  id: string;
-  fromStatus: string;
-  toStatus: string;
-  occurredAt: string;
-};
-
-const PAGE_SIZE = 8;
-
-const panelStyle: React.CSSProperties = {
-  border: "1px solid #ddd",
-  borderRadius: 12,
-  padding: 16,
-  background: "#0f0f0f",
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#111",
-  color: "#fff",
-  border: "1px solid #333",
-  borderRadius: 8,
-  padding: "10px 12px",
-};
-
-const selectStyle: React.CSSProperties = {
-  background: "#111",
-  color: "#fff",
-  border: "1px solid #333",
-  borderRadius: 8,
-  padding: "6px 8px",
-};
-
-const STATUS_OPTIONS = [
-  { value: "APPLIED", label: "Applied" },
-  { value: "RECRUITER_SCREEN", label: "Recruiter Screen" },
-  { value: "OA", label: "OA" },
-  { value: "INTERVIEW_ROUND_1", label: "Round 1" },
-  { value: "INTERVIEW_ROUND_2", label: "Round 2" },
-  { value: "INTERVIEW_ROUND_3", label: "Final Round" },
-  { value: "OFFER", label: "Offer" },
-  { value: "REJECTED", label: "Rejected" },
-  { value: "WITHDRAWN", label: "Withdrawn" },
-  { value: "GHOSTED", label: "Ghosted" },
-] as const;
-
-function statusLabel(value: string) {
-  const found = STATUS_OPTIONS.find((s) => s.value === value);
-  return found?.label ?? value;
-}
-
-function ErrorBanner({ message }: { message: string }) {
-  return (
-    <div
-      style={{
-        border: "1px solid #6b1d1d",
-        background: "#2a0f12",
-        color: "#ffb4b4",
-        borderRadius: 10,
-        padding: "10px 12px",
-      }}
-    >
-      {message}
-    </div>
-  );
-}
+const PAGE_SIZE = 12;
 
 async function safeJson(res: Response) {
   try {
@@ -95,22 +54,30 @@ async function safeJson(res: Response) {
 }
 
 export default function ApplicationsPage() {
+  const { toast } = useToast();
+
   const [items, setItems] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [companyQuery, setCompanyQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [resumes, setResumes] = useState<Resume[]>([]);
 
+  // Create form
   const [company, setCompany] = useState("");
   const [roleTitle, setRoleTitle] = useState("");
   const [jobUrl, setJobUrl] = useState("");
   const [location, setLocation] = useState("");
   const [resumeIdForCreate, setResumeIdForCreate] = useState("");
-  const [resumes, setResumes] = useState<Resume[]>([]);
+  const [sourceForCreate, setSourceForCreate] = useState("");
+  const [priorityForCreate, setPriorityForCreate] = useState("");
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
-  const [openTimelineId, setOpenTimelineId] = useState<string | null>(null);
-  const [timeline, setTimeline] = useState<Record<string, StatusEvent[]>>({});
+  // Drawer
+  const [drawerApp, setDrawerApp] = useState<Application | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const filteredItems = items.filter((item) => {
@@ -126,200 +93,78 @@ export default function ApplicationsPage() {
   async function load(showSpinner = true) {
     if (showSpinner) setLoading(true);
     setErr(null);
-
     const res = await fetch("/api/applications", { cache: "no-store" });
     const data = await safeJson(res);
-
     if (!res.ok) {
       setItems([]);
       setErr(data?.error ?? `Failed to load applications (${res.status})`);
-      if (showSpinner) setLoading(false);
-      return;
+    } else {
+      setItems(data?.items ?? []);
     }
-
-    setItems(data?.items ?? []);
     if (showSpinner) setLoading(false);
   }
 
   async function loadResumes() {
     const res = await fetch("/api/resumes", { cache: "no-store" });
     const data = await safeJson(res);
-
-    if (!res.ok) {
-      setResumes([]);
-      setErr(data?.error ?? `Failed to load resumes (${res.status})`);
-      return;
+    if (res.ok) {
+      setResumes((data?.items ?? []).map((r: any) => ({ id: r.id, label: r.label })));
     }
-
-    setResumes((data?.items ?? []).map((r: { id: string; label: string }) => ({ id: r.id, label: r.label })));
   }
 
-  async function onDelete(id: string) {
-    if (busyId === id) return;
+  async function onCreate(e: React.FormEvent) {
+    e.preventDefault();
     setErr(null);
+    const body: Record<string, unknown> = { company, roleTitle, jobUrl, location, resumeId: resumeIdForCreate };
+    if (sourceForCreate) body.source = sourceForCreate;
+    if (priorityForCreate) body.priority = priorityForCreate;
 
-    const prev = items;
-    setItems((cur) => cur.filter((a) => a.id !== id));
-    setBusyId(id);
-
-    try {
-      const res = await fetch(`/api/applications/${id}`, { method: "DELETE" });
-      const data = await safeJson(res);
-
-      if (!res.ok) {
-        setItems(prev);
-        setErr(data?.error ?? `Delete failed (${res.status})`);
-      }
-    } finally {
-      setBusyId(null);
+    const res = await fetch("/api/applications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await safeJson(res);
+    if (!res.ok) {
+      setErr(data?.error ?? `Request failed (${res.status})`);
+      return;
     }
+    toast(`Added ${company.trim()}`, "success");
+    setCompany("");
+    setRoleTitle("");
+    setJobUrl("");
+    setLocation("");
+    setResumeIdForCreate("");
+    setSourceForCreate("");
+    setPriorityForCreate("");
+    setShowCreateForm(false);
+    await load(false);
   }
 
   async function onStatusChange(id: string, status: string) {
     if (busyId === id) return;
-    setErr(null);
-
     const prev = items;
     setItems((cur) => cur.map((a) => (a.id === id ? { ...a, status } : a)));
     setBusyId(id);
-
     try {
       const res = await fetch(`/api/applications/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
-
       const data = await safeJson(res);
-
       if (!res.ok) {
         setItems(prev);
-        setErr(data?.error ?? `Update failed (${res.status})`);
-        return;
-      }
-
-      if (openTimelineId === id) {
-        await loadTimeline(id);
+        toast(data?.error ?? "Update failed", "error");
       }
     } finally {
       setBusyId(null);
     }
   }
 
-  async function onCreate(e: React.SyntheticEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setErr(null);
-
-    const res = await fetch("/api/applications", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        company,
-        roleTitle,
-        jobUrl,
-        location,
-        resumeId: resumeIdForCreate,
-      }),
-    });
-
-    const data = await safeJson(res);
-
-    if (!res.ok) {
-      setErr(data?.error ?? `Request failed (${res.status})`);
-      return;
-    }
-
-    setCompany("");
-    setRoleTitle("");
-    setJobUrl("");
-    setLocation("");
-    setResumeIdForCreate("");
-    await load(false);
-  }
-
-  async function onResumeChange(id: string, resumeId: string) {
-    if (busyId === id) return;
-    setErr(null);
-
-    const prev = items;
-    const nextResume = resumes.find((r) => r.id === resumeId) ?? null;
-
-    setItems((cur) =>
-      cur.map((a) =>
-        a.id === id
-          ? {
-              ...a,
-              resumeId: resumeId || null,
-              resume: resumeId ? nextResume : null,
-            }
-          : a
-      )
-    );
-
-    setBusyId(id);
-
-    try {
-      const res = await fetch(`/api/applications/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resumeId }),
-      });
-
-      const data = await safeJson(res);
-
-      if (!res.ok) {
-        setItems(prev);
-        setErr(data?.error ?? `Resume update failed (${res.status})`);
-      }
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function loadTimeline(appId: string) {
-    const res = await fetch(`/api/applications/${appId}/status-events`, { cache: "no-store" });
-    const data = await safeJson(res);
-
-    if (!res.ok) {
-      setErr(data?.error ?? `Failed to load timeline (${res.status})`);
-      return;
-    }
-
-    setTimeline((cur) => ({ ...cur, [appId]: data?.items ?? [] }));
-  }
-
-  async function onToggleTimeline(appId: string) {
-    if (openTimelineId === appId) {
-      setOpenTimelineId(null);
-      return;
-    }
-
-    setOpenTimelineId(appId);
-    await loadTimeline(appId);
-  }
-
-  async function onUndoStatus(appId: string) {
-    if (busyId === appId) return;
-    setErr(null);
-    setBusyId(appId);
-
-    try {
-      const res = await fetch(`/api/applications/${appId}/undo-status`, { method: "POST" });
-      const data = await safeJson(res);
-
-      if (!res.ok) {
-        setErr(data?.error ?? `Undo failed (${res.status})`);
-        return;
-      }
-
-      setItems((cur) => cur.map((a) => (a.id === appId ? { ...a, status: data.newStatus } : a)));
-
-      if (openTimelineId === appId) {
-        await loadTimeline(appId);
-      }
-    } finally {
-      setBusyId(null);
-    }
+  function openDrawer(app: Application) {
+    setDrawerApp(app);
+    setDrawerOpen(true);
   }
 
   useEffect(() => {
@@ -331,224 +176,217 @@ export default function ApplicationsPage() {
     setVisibleCount(PAGE_SIZE);
   }, [companyQuery, statusFilter, items.length]);
 
+  // Keep the drawer in sync when the items list is refreshed (e.g. after undo)
+  useEffect(() => {
+    if (drawerApp) {
+      const updated = items.find((a) => a.id === drawerApp.id);
+      if (updated) setDrawerApp(updated);
+    }
+  }, [items]);
+
+  function formatSalary(app: Application) {
+    if (app.salaryMin == null && app.salaryMax == null) return null;
+    const cur = app.currency ?? "USD";
+    const fmt = (n: number) => n.toLocaleString();
+    if (app.salaryMin != null && app.salaryMax != null)
+      return `${cur} ${fmt(app.salaryMin)} - ${fmt(app.salaryMax)}`;
+    if (app.salaryMin != null) return `${cur} ${fmt(app.salaryMin)}+`;
+    return `Up to ${cur} ${fmt(app.salaryMax!)}`;
+  }
+
   return (
-    <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
-      <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 16 }}>Applications</h1>
-
-      <form onSubmit={onCreate} style={{ ...panelStyle, display: "grid", gap: 8, marginBottom: 18 }}>
-        <input
-          placeholder="Company (required)"
-          value={company}
-          onChange={(e) => setCompany(e.target.value)}
-          required
-          style={inputStyle}
-        />
-        <input
-          placeholder="Role title (required)"
-          value={roleTitle}
-          onChange={(e) => setRoleTitle(e.target.value)}
-          required
-          style={inputStyle}
-        />
-        <input
-          placeholder="Job URL (optional)"
-          value={jobUrl}
-          onChange={(e) => setJobUrl(e.target.value)}
-          style={inputStyle}
-        />
-        <input
-          placeholder="Location (optional)"
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-          style={inputStyle}
-        />
-        <label style={{ fontSize: 13, opacity: 0.85 }}>
-          Resume{" "}
-          <select
-            value={resumeIdForCreate}
-            onChange={(e) => setResumeIdForCreate(e.target.value)}
-            style={{ ...selectStyle, marginLeft: 6 }}
-          >
-            <option value="">None</option>
-            {resumes.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <button type="submit" style={{ padding: "10px 12px" }}>
-          Add application
-        </button>
-
-        {err && <ErrorBanner message={err} />}
-      </form>
-
-      <div style={{ ...panelStyle, display: "grid", gap: 12, marginBottom: 18 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-          <div style={{ fontSize: 14, opacity: 0.82 }}>
-            Showing {Math.min(visibleItems.length, filteredItems.length)} of {filteredItems.length} matching
-            {filteredItems.length !== items.length ? ` (${items.length} total)` : ""}
-          </div>
-          <button type="button" onClick={() => load(false)} style={{ padding: "8px 10px" }}>
-            Refresh
-          </button>
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-text-primary tracking-tight">Applications</h1>
+          <p className="text-sm text-text-muted mt-0.5">
+            {items.length} total{filteredItems.length !== items.length ? `, ${filteredItems.length} matching` : ""}
+          </p>
         </div>
-
-        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr" }}>
-          <input
-            placeholder="Search by company"
-            value={companyQuery}
-            onChange={(e) => setCompanyQuery(e.target.value)}
-            style={inputStyle}
-          />
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={inputStyle}>
-            <option value="ALL">All statuses</option>
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => load(false)}>Refresh</Button>
+          <Button variant="primary" size="sm" onClick={() => setShowCreateForm(!showCreateForm)}>
+            {showCreateForm ? "Cancel" : "+ Add"}
+          </Button>
         </div>
       </div>
 
-      {loading ? (
-        <div style={panelStyle}>Loading...</div>
-      ) : items.length === 0 ? (
-        <div style={panelStyle}>
-          <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}>No applications yet</div>
-          <div style={{ opacity: 0.8 }}>
-            Add your first application above to start tracking pipeline status, resumes, and analytics.
-          </div>
-        </div>
-      ) : filteredItems.length === 0 ? (
-        <div style={panelStyle}>
-          <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}>No matches</div>
-          <div style={{ opacity: 0.8 }}>Try a different company search or clear the status filter.</div>
-        </div>
-      ) : (
-        <div style={{ display: "grid", gap: 10 }}>
-          {visibleItems.map((a) => (
-            <div key={a.id} style={{ ...panelStyle, opacity: busyId === a.id ? 0.8 : 1 }}>
-              <div style={{ fontWeight: 700 }}>
-                {a.company} - {a.roleTitle}
-              </div>
+      {err && <ErrorBanner message={err} onDismiss={() => setErr(null)} />}
 
-              <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                <label style={{ fontSize: 13, opacity: 0.85 }}>
-                  Status{" "}
-                  <select
-                    value={a.status}
-                    onChange={(e) => onStatusChange(a.id, e.target.value)}
-                    disabled={busyId === a.id}
-                    style={{ ...selectStyle, marginLeft: 6 }}
-                  >
-                    {STATUS_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <span style={{ fontSize: 13, opacity: 0.8 }}>
-                  Applied: {new Date(a.appliedAt).toLocaleString()}
-                </span>
-
-                <button
-                  onClick={() => onDelete(a.id)}
-                  disabled={busyId === a.id}
-                  style={{ marginLeft: "auto", padding: "6px 10px" }}
-                  type="button"
-                >
-                  Delete
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => onToggleTimeline(a.id)}
-                  disabled={busyId === a.id}
-                  style={{ padding: "6px 10px" }}
-                >
-                  {openTimelineId === a.id ? "Hide timeline" : "Timeline"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => onUndoStatus(a.id)}
-                  disabled={busyId === a.id}
-                  style={{ padding: "6px 10px" }}
-                >
-                  Undo
-                </button>
-              </div>
-
-              <div style={{ marginTop: 10 }}>
-                <label style={{ fontSize: 13, opacity: 0.85 }}>
-                  Resume{" "}
-                  <select
-                    value={a.resumeId ?? ""}
-                    onChange={(e) => onResumeChange(a.id, e.target.value)}
-                    disabled={busyId === a.id}
-                    style={{ ...selectStyle, marginLeft: 6 }}
-                  >
-                    <option value="">None</option>
-                    {resumes.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                {a.resume?.label && (
-                  <div style={{ fontSize: 13, opacity: 0.8, marginTop: 6 }}>Selected: {a.resume.label}</div>
-                )}
-              </div>
-
-              {openTimelineId === a.id && (
-                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #222" }}>
-                  <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 8 }}>Status timeline</div>
-
-                  {(timeline[a.id] ?? []).length === 0 ? (
-                    <div style={{ fontSize: 13, opacity: 0.7 }}>No status changes yet.</div>
-                  ) : (
-                    <div style={{ display: "grid", gap: 6 }}>
-                      {(timeline[a.id] ?? []).map((ev) => (
-                        <div key={ev.id} style={{ fontSize: 13, opacity: 0.9 }}>
-                          <span style={{ opacity: 0.75 }}>{new Date(ev.occurredAt).toLocaleString()}:</span>{" "}
-                          {statusLabel(ev.fromStatus)} {"->"} {statusLabel(ev.toStatus)}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {a.location && <div>Location: {a.location}</div>}
-              {a.jobUrl && (
-                <div>
-                  <a href={a.jobUrl} target="_blank" rel="noreferrer">
-                    Job link
-                  </a>
-                </div>
-              )}
+      {/* Create form */}
+      {showCreateForm && (
+        <Card className="animate-fade-in">
+          <form onSubmit={onCreate} className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <Input placeholder="Company (required)" value={company} onChange={(e) => setCompany(e.target.value)} required />
+              <Input placeholder="Role title (required)" value={roleTitle} onChange={(e) => setRoleTitle(e.target.value)} required />
             </div>
-          ))}
+            <div className="grid grid-cols-2 gap-3">
+              <Input placeholder="Job URL (optional)" value={jobUrl} onChange={(e) => setJobUrl(e.target.value)} />
+              <Input placeholder="Location (optional)" value={location} onChange={(e) => setLocation(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <Select
+                value={resumeIdForCreate}
+                onChange={(e) => setResumeIdForCreate(e.target.value)}
+                options={resumes.map((r) => ({ value: r.id, label: r.label }))}
+                placeholder="Resume..."
+              />
+              <Select
+                value={sourceForCreate}
+                onChange={(e) => setSourceForCreate(e.target.value)}
+                options={[...SOURCE_OPTIONS]}
+                placeholder="Source..."
+              />
+              <Select
+                value={priorityForCreate}
+                onChange={(e) => setPriorityForCreate(e.target.value)}
+                options={[...PRIORITY_OPTIONS]}
+                placeholder="Priority..."
+              />
+            </div>
+            <Button type="submit" variant="primary">Add Application</Button>
+          </form>
+        </Card>
+      )}
+
+      {/* Filters */}
+      <div className="flex gap-3">
+        <div className="flex-1">
+          <Input
+            placeholder="Search by company..."
+            value={companyQuery}
+            onChange={(e) => setCompanyQuery(e.target.value)}
+          />
+        </div>
+        <div className="w-[180px]">
+          <Select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            options={[{ value: "ALL", label: "All statuses" }, ...STATUS_OPTIONS]}
+          />
+        </div>
+      </div>
+
+      {/* List */}
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-text-muted text-sm animate-pulse">Loading applications...</div>
+        </div>
+      ) : items.length === 0 ? (
+        <Card className="text-center py-12">
+          <p className="text-lg font-semibold text-text-primary mb-2">No applications yet</p>
+          <p className="text-sm text-text-muted">Click &quot;+ Add&quot; to start tracking your job search.</p>
+        </Card>
+      ) : filteredItems.length === 0 ? (
+        <Card className="text-center py-12">
+          <p className="text-lg font-semibold text-text-primary mb-2">No matches</p>
+          <p className="text-sm text-text-muted">Try a different search or clear the status filter.</p>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {visibleItems.map((a) => {
+            const salary = formatSalary(a);
+            return (
+              <Card
+                key={a.id}
+                hoverable
+                padding="sm"
+                onClick={() => openDrawer(a)}
+                className={`group ${busyId === a.id ? "opacity-60" : ""}`}
+              >
+                <div className="flex items-start gap-3">
+                  {/* Left: info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-semibold text-text-primary text-sm truncate">{a.company}</span>
+                      <span className="text-text-muted text-sm hidden sm:inline">&mdash;</span>
+                      <span className="text-text-secondary text-sm truncate hidden sm:inline">{a.roleTitle}</span>
+                    </div>
+                    {/* Mobile role title */}
+                    <div className="text-text-secondary text-sm truncate sm:hidden mb-1">{a.roleTitle}</div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant={statusToBadgeVariant(a.status)} dot>{statusLabel(a.status)}</Badge>
+                      {a.priority && (
+                        <Badge variant={priorityToBadgeVariant(a.priority)}>{priorityLabel(a.priority)}</Badge>
+                      )}
+                      {a.source && (
+                        <Badge variant="default">{sourceLabel(a.source)}</Badge>
+                      )}
+                      {a.location && (
+                        <span className="text-xs text-text-muted">{a.location}</span>
+                      )}
+                      {salary && (
+                        <span className="text-xs text-positive font-mono">{salary}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right: meta + quick status */}
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <span className="text-[11px] text-text-muted font-mono">
+                      {new Date(a.appliedAt).toLocaleDateString()}
+                    </span>
+                    <select
+                      value={a.status}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        onStatusChange(a.id, e.target.value);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      disabled={busyId === a.id}
+                      className="bg-surface-2 text-text-secondary text-xs border border-border rounded-md px-2 py-1 focus-ring cursor-pointer appearance-none"
+                    >
+                      {STATUS_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Subtitle row */}
+                {(a.resume || a.contactName || a.nextFollowUp) && (
+                  <div className="flex items-center gap-3 mt-2 text-xs text-text-muted">
+                    {a.resume && <span>Resume: {a.resume.label}</span>}
+                    {a.contactName && <span>Contact: {a.contactName}</span>}
+                    {a.nextFollowUp && (
+                      <span className={new Date(a.nextFollowUp) < new Date() ? "text-negative" : ""}>
+                        Follow-up: {new Date(a.nextFollowUp).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </Card>
+            );
+          })}
 
           {filteredItems.length > visibleItems.length && (
-            <button
-              type="button"
-              onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
-              style={{ padding: "10px 12px", justifySelf: "center", minWidth: 160 }}
-            >
-              Load more
-            </button>
+            <div className="flex justify-center pt-2">
+              <Button
+                variant="ghost"
+                onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+              >
+                Load more ({filteredItems.length - visibleItems.length} remaining)
+              </Button>
+            </div>
           )}
         </div>
       )}
+
+      {/* Detail drawer */}
+      <ApplicationDetailDrawer
+        app={drawerApp}
+        resumes={resumes}
+        open={drawerOpen}
+        onClose={() => {
+          setDrawerOpen(false);
+          setDrawerApp(null);
+        }}
+        onSaved={() => load(false)}
+        onDeleted={() => load(false)}
+      />
     </div>
   );
 }

@@ -6,6 +6,24 @@ datasource db {
   provider = "postgresql"
 }
 
+enum ApplicationSource {
+  LINKEDIN
+  INDEED
+  GLASSDOOR
+  COMPANY_WEBSITE
+  REFERRAL
+  RECRUITER_OUTREACH
+  JOB_BOARD
+  CAREER_FAIR
+  OTHER
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 enum ApplicationStatus {
   APPLIED
   RECRUITER_SCREEN
@@ -113,6 +131,18 @@ model Application {
   resumeId String?
   resume   Resume? @relation(fields: [resumeId], references: [id], onDelete: SetNull)
 
+  salaryMin       Int?
+  salaryMax       Int?
+  currency        String?            @default("USD")
+  contactName     String?
+  contactEmail    String?
+  contactLinkedIn String?
+  notes           String?
+  source          ApplicationSource?
+  jobDescription  String?
+  priority        Priority?          @default(MEDIUM)
+  nextFollowUp    DateTime?
+
   statusEvents ApplicationStatusEvent[]
 
   createdAt DateTime @default(now())
@@ -121,6 +151,8 @@ model Application {
   @@index([userId])
   @@index([userId, status])
   @@index([userId, appliedAt])
+  @@index([userId, nextFollowUp])
+  @@index([userId, updatedAt])
   @@index([resumeId])
   @@index([company])
 }
