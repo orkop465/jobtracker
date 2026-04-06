@@ -1,55 +1,52 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: #030508;
+  --color-foreground: #f0f4ff;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-dm-serif);
 
-  /* Surface layers — deep navy-ink, not pure black */
-  --color-surface-0: #0a0c10;
-  --color-surface-1: #0f1218;
-  --color-surface-2: #161a24;
-  --color-surface-3: #1c2230;
-  --color-surface-4: #252d3e;
+  /* Surface layers — ultra-dark blue-black */
+  --color-surface-0: #030508;
+  --color-surface-1: #080c14;
+  --color-surface-2: #0d1220;
+  --color-surface-3: #131a2c;
+  --color-surface-4: #1a2340;
 
-  /* Borders — cool slate */
-  --color-border: #1c2232;
-  --color-border-subtle: #151b28;
-  --color-border-strong: #2a3348;
+  /* Borders */
+  --color-border: #111a2e;
+  --color-border-subtle: #0a1020;
+  --color-border-strong: #1e2d4a;
 
-  /* Text hierarchy — crisp whites and cool grays */
-  --color-text-primary: #eef0f4;
-  --color-text-secondary: #8892a8;
-  --color-text-muted: #4e5871;
+  /* Text hierarchy */
+  --color-text-primary: #f0f4ff;
+  --color-text-secondary: #5a6a8a;
+  --color-text-muted: #2a3652;
 
-  /* Accent — electric teal/cyan */
-  --color-accent: #2dd4bf;
-  --color-accent-hover: #5eead4;
-  --color-accent-muted: rgba(45, 212, 191, 0.10);
-  --color-accent-text: #5eead4;
+  /* Primary accent — electric cyan */
+  --color-accent: #00d4ff;
+  --color-accent-hover: #33e0ff;
+  --color-accent-muted: rgba(0, 212, 255, 0.08);
+  --color-accent-text: #66e8ff;
+
+  /* Secondary accent — warm orange */
+  --color-orange: #ff6b35;
+  --color-orange-muted: rgba(255, 107, 53, 0.08);
+
+  /* Tertiary — soft purple */
+  --color-purple: #a78bfa;
+  --color-purple-muted: rgba(167, 139, 250, 0.08);
 
   /* Semantic */
-  --color-positive: #34d399;
-  --color-positive-muted: rgba(52, 211, 153, 0.10);
-  --color-negative: #fb7185;
-  --color-negative-muted: rgba(251, 113, 133, 0.08);
-  --color-info: #60a5fa;
-  --color-info-muted: rgba(96, 165, 250, 0.10);
-  --color-warning: #fbbf24;
-  --color-warning-muted: rgba(251, 191, 36, 0.10);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0c10;
-    --foreground: #eef0f4;
-  }
+  --color-positive: #00ff88;
+  --color-positive-muted: rgba(0, 255, 136, 0.06);
+  --color-negative: #ff3366;
+  --color-negative-muted: rgba(255, 51, 102, 0.06);
+  --color-info: #00d4ff;
+  --color-info-muted: rgba(0, 212, 255, 0.08);
+  --color-warning: #ffb800;
+  --color-warning-muted: rgba(255, 184, 0, 0.08);
 }
 
 * {
@@ -57,15 +54,33 @@
   scrollbar-color: var(--color-surface-4) transparent;
 }
 
+::selection {
+  background-color: #00d4ff;
+  color: #030508;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: #030508;
+  color: #f0f4ff;
   font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Utility animations */
+/* ============================================================
+   TYPOGRAPHY
+   ============================================================ */
+.font-data {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+.font-display {
+  font-family: var(--font-dm-serif), Georgia, serif;
+}
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
@@ -91,14 +106,34 @@ body {
   to { opacity: 0; transform: translateY(12px) scale(0.96); }
 }
 
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+@keyframes ticker {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
 }
 
-@keyframes pulse-subtle {
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes float-delayed {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-8px) rotate(0.5deg); }
+}
+
+@keyframes blink-cursor {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+  50% { opacity: 0; }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(0, 212, 255, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(0, 212, 255, 0.6); }
+}
+
+@keyframes bar-grow {
+  from { height: 0; opacity: 0; }
+  to { opacity: 1; }
 }
 
 .animate-fade-in {
@@ -121,38 +156,121 @@ body {
   animation: toast-out 0.2s ease-in both;
 }
 
+.animate-ticker {
+  display: flex;
+  width: max-content;
+  animation: ticker 40s linear infinite;
+}
+
+.animate-float {
+  animation: float 8s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float-delayed 10s ease-in-out infinite 2s;
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 3s ease-in-out infinite;
+}
+
 /* Stagger children */
 .stagger-children > * {
-  animation: fade-in 0.35s ease-out both;
+  animation: fade-in 0.4s ease-out both;
 }
 .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
-.stagger-children > *:nth-child(2) { animation-delay: 50ms; }
-.stagger-children > *:nth-child(3) { animation-delay: 100ms; }
-.stagger-children > *:nth-child(4) { animation-delay: 150ms; }
-.stagger-children > *:nth-child(5) { animation-delay: 200ms; }
-.stagger-children > *:nth-child(6) { animation-delay: 250ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 60ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 120ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 180ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 240ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 300ms; }
 
-/* Subtle grain texture for cards */
-.noise-texture::before {
+/* ============================================================
+   BACKGROUNDS & ATMOSPHERE
+   ============================================================ */
+
+/* Ambient mesh — layered radial gradients */
+.ambient-mesh {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 15% 50%, rgba(0, 212, 255, 0.06) 0%, transparent 40%),
+    radial-gradient(circle at 85% 30%, rgba(167, 139, 250, 0.04) 0%, transparent 50%),
+    radial-gradient(circle at 50% 120%, rgba(255, 107, 53, 0.03) 0%, transparent 60%);
+}
+
+/* Grid background */
+.grid-bg {
+  background-image:
+    linear-gradient(to right, rgba(255,255,255,0.018) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,0.018) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ============================================================
+   CARD & PANEL EFFECTS
+   ============================================================ */
+
+/* Gradient border card — signature look */
+.gradient-border-card {
+  position: relative;
+  background: rgba(8, 12, 20, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 2px;
+}
+.gradient-border-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 2px;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.4), rgba(255, 255, 255, 0.05) 40%, rgba(255, 107, 53, 0.2));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Subtle grid overlay for cards */
+.grid-lines::before {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
   opacity: 0.02;
   pointer-events: none;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 256px 256px;
+  background-image:
+    linear-gradient(var(--color-text-muted) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-text-muted) 1px, transparent 1px);
+  background-size: 40px 40px;
 }
 
-/* Focus ring */
+/* Terminal cursor blink */
+.terminal-cursor::after {
+  content: '\2588';
+  animation: blink-cursor 1s step-end infinite;
+  color: var(--color-accent);
+  margin-left: 4px;
+}
+
+/* ============================================================
+   FOCUS & INTERACTION
+   ============================================================ */
+
 .focus-ring {
   outline: none;
 }
 .focus-ring:focus-visible {
-  box-shadow: 0 0 0 2px var(--color-surface-0), 0 0 0 4px var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-surface-0), 0 0 0 3px var(--color-accent);
 }
 
-/* Auth page centered layout */
+/* ============================================================
+   AUTH PAGES
+   ============================================================ */
+
 .auth-container {
   min-height: 100vh;
   display: flex;
@@ -160,6 +278,52 @@ body {
   justify-content: center;
   padding: 2rem 1rem;
   background:
-    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(45, 212, 191, 0.06), transparent 70%),
-    var(--color-surface-0);
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(0, 212, 255, 0.04), transparent 60%),
+    #030508;
+}
+
+/* ============================================================
+   BRAND GRADIENTS
+   ============================================================ */
+
+.gradient-text {
+  background: linear-gradient(135deg, #00d4ff, #a78bfa, #ff6b35);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-subtle {
+  background: linear-gradient(135deg, #f0f4ff, #5a6a8a);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-bg {
+  background: linear-gradient(135deg, #00d4ff, #0ea5e9);
+}
+.gradient-bg:hover {
+  background: linear-gradient(135deg, #33e0ff, #38bdf8);
+}
+
+/* Tabular numbers */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Glass panel */
+.glass-panel {
+  background: rgba(8, 12, 20, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Section index — editorial numbering */
+.section-index {
+  font-family: var(--font-geist-mono);
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
 }

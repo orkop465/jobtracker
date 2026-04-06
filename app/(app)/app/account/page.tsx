@@ -20,23 +20,24 @@ export default async function AccountPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-text-primary tracking-tight">Account</h1>
-        <p className="text-sm text-text-muted mt-1">
-          Signed in as <span className="text-text-primary font-medium">{session.user?.email ?? "unknown"}</span>
+      <div className="pb-5 border-b border-white/5">
+        <div className="section-index text-accent mb-2">05 / Settings</div>
+        <h1 className="text-2xl font-display text-text-primary">Account</h1>
+        <p className="font-data text-[9px] text-text-muted mt-1 uppercase tracking-widest">
+          Signed in as <span className="text-text-primary">{session.user?.email ?? "unknown"}</span>
         </p>
       </div>
 
-      <div className="bg-surface-1 border border-border rounded-xl p-5 space-y-4">
+      <div className="gradient-border-card p-6 space-y-5">
         <div>
-          <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Auth Provider</p>
-          <p className="text-sm text-text-primary capitalize">
+          <p className="font-data text-[9px] font-medium text-text-muted uppercase tracking-widest mb-2">Auth Provider</p>
+          <p className="text-sm text-text-primary capitalize font-data">
             {linkedProviders.length ? linkedProviders.join(", ") : "Credentials"}
           </p>
         </div>
 
-        <div className="border-t border-border pt-4">
-          <p className="text-xs text-text-muted mb-3">
+        <div className="border-t border-white/5 pt-5">
+          <p className="text-xs text-text-muted mb-4 font-data">
             Provider linking is currently disabled. Google and GitHub are treated as separate accounts.
           </p>
           <SignOutButton />

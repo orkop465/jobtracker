@@ -12,22 +12,24 @@ export function StatCard({ label, value, subtitle, trend, className = "" }: Stat
   return (
     <div
       className={`
-        relative bg-surface-1 border border-border rounded-xl p-4
-        noise-texture overflow-hidden
+        relative overflow-hidden
+        gradient-border-card p-5
+        group hover:shadow-[0_4px_24px_-4px_rgba(0,212,255,0.1)]
+        transition-shadow duration-300
         ${className}
       `}
     >
-      <p className="text-xs font-medium text-text-muted tracking-wide uppercase mb-2">
+      <p className="font-data text-[9px] font-medium text-text-muted tracking-widest uppercase mb-4">
         {label}
       </p>
-      <div className="flex items-end gap-2">
-        <p className="text-2xl font-bold text-text-primary tracking-tight font-[family-name:var(--font-geist-mono)]">
+      <div className="flex items-end gap-2.5">
+        <p className="text-[2.25rem] leading-none font-display text-text-primary tabular-nums">
           {value}
         </p>
         {trend && (
           <span
             className={`
-              inline-flex items-center gap-0.5 text-xs font-medium mb-1
+              inline-flex items-center gap-0.5 text-xs font-medium font-data mb-1
               ${trend.value > 0 ? "text-positive" : trend.value < 0 ? "text-negative" : "text-text-muted"}
             `}
           >
@@ -38,10 +40,8 @@ export function StatCard({ label, value, subtitle, trend, className = "" }: Stat
         )}
       </div>
       {subtitle && (
-        <p className="text-xs text-text-secondary mt-1">{subtitle}</p>
+        <p className="text-xs text-text-secondary mt-1.5 font-data">{subtitle}</p>
       )}
-      {/* Subtle accent glow for emphasis */}
-      <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full bg-accent/[0.03] blur-2xl pointer-events-none" />
     </div>
   );
 }

@@ -90,8 +90,8 @@ export function Badge({ variant = "default", dot, className = "", children }: Ba
     <span
       className={`
         inline-flex items-center gap-1.5
-        px-2 py-0.5 text-xs font-medium
-        border rounded-md tracking-wide
+        px-2 py-0.5 text-[11px] font-medium
+        border rounded font-data tracking-wide
         ${variantClasses[variant]}
         ${className}
       `}

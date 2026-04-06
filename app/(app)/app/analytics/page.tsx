@@ -89,15 +89,15 @@ export default function AnalyticsPage() {
         width: 920,
         height: 460,
         tooltip: { trigger: "none" },
-        backgroundColor: "#0f1218",
+        backgroundColor: "#0b0f18",
         sankey: {
           node: {
             width: 14,
             nodePadding: 24,
-            colors: ["#4e5871", "#60a5fa", "#2dd4bf", "#a78bfa", "#34d399", "#fb7185", "#f97316", "#fbbf24"],
-            label: { color: "#eef0f4", fontSize: 13, bold: true },
+            colors: ["#3d4f6a", "#38bdf8", "#14b8a6", "#a78bfa", "#10b981", "#f43f5e", "#f97316", "#f59e0b"],
+            label: { color: "#e4e8f1", fontSize: 13, bold: true },
           },
-          link: { colorMode: "source", color: { fillOpacity: 0.35 } },
+          link: { colorMode: "source", color: { fillOpacity: 0.3 } },
         },
       });
     }
@@ -132,7 +132,7 @@ export default function AnalyticsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-text-muted text-sm animate-pulse">Loading analytics...</div>
+        <div className="text-text-muted text-sm animate-pulse font-data">Loading analytics...</div>
       </div>
     );
   }
@@ -145,14 +145,22 @@ export default function AnalyticsPage() {
   const timeEntries = Object.entries(data.timeInStage).filter(([, v]) => v.samples > 0);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-text-primary tracking-tight">Analytics</h1>
-        <p className="text-sm text-text-muted mt-0.5">Data-driven insights for your job search</p>
+    <div className="space-y-5">
+      <div className="flex items-center justify-between pb-6 border-b border-white/5">
+        <div>
+          <div className="section-index text-accent mb-2">02 / Analytics</div>
+          <h1 className="text-3xl font-display text-text-primary">Analytics</h1>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-1 border border-white/5">
+          <div className="w-1.5 h-1.5 bg-accent shadow-[0_0_6px_rgba(0,212,255,0.6)]" />
+          <span className="font-data text-[9px] text-text-secondary tabular-nums uppercase tracking-widest">
+            {data.summary.totalApplications} records
+          </span>
+        </div>
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 stagger-children">
         <StatCard label="Total Apps" value={data.summary.totalApplications} />
         <StatCard label="Response Rate" value={`${(data.summary.responseRate * 100).toFixed(0)}%`} />
         <StatCard label="Responded" value={data.summary.respondedApplications} />
@@ -161,22 +169,22 @@ export default function AnalyticsPage() {
 
       {/* Conversion funnel */}
       <Card>
-        <h2 className="text-sm font-semibold text-text-primary mb-4">Conversion Funnel</h2>
+        <h2 className="text-xs font-semibold text-text-primary mb-4 uppercase tracking-wider font-data">Conversion Funnel</h2>
         <div className="space-y-3">
           {[
-            { label: "Applied", count: data.funnel.applied, pct: 100 },
-            { label: "Screen", count: data.funnel.screen, pct: data.funnel.applied ? (data.funnel.screen / data.funnel.applied) * 100 : 0 },
-            { label: "Interview", count: data.funnel.interview, pct: data.funnel.applied ? (data.funnel.interview / data.funnel.applied) * 100 : 0 },
-            { label: "Offer", count: data.funnel.offer, pct: data.funnel.applied ? (data.funnel.offer / data.funnel.applied) * 100 : 0 },
+            { label: "Applied", count: data.funnel.applied, pct: 100, color: "bg-info/50", glow: "" },
+            { label: "Screen", count: data.funnel.screen, pct: data.funnel.applied ? (data.funnel.screen / data.funnel.applied) * 100 : 0, color: "bg-accent/50", glow: "" },
+            { label: "Interview", count: data.funnel.interview, pct: data.funnel.applied ? (data.funnel.interview / data.funnel.applied) * 100 : 0, color: "bg-[#a78bfa]/50", glow: "" },
+            { label: "Offer", count: data.funnel.offer, pct: data.funnel.applied ? (data.funnel.offer / data.funnel.applied) * 100 : 0, color: "bg-positive/60", glow: "shadow-[0_0_8px_rgba(16,185,129,0.2)]" },
           ].map((stage) => (
             <div key={stage.label}>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium text-text-secondary">{stage.label}</span>
-                <span className="text-xs font-mono text-text-muted">{stage.count} ({stage.pct.toFixed(0)}%)</span>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-medium text-text-secondary font-data">{stage.label}</span>
+                <span className="text-xs font-data text-text-muted tabular-nums">{stage.count} <span className="text-text-primary">({stage.pct.toFixed(0)}%)</span></span>
               </div>
-              <div className="h-2 bg-surface-3 rounded-full overflow-hidden">
+              <div className="h-2 bg-surface-3 rounded-sm overflow-hidden">
                 <div
-                  className="h-full bg-accent rounded-full transition-all duration-500"
+                  className={`h-full ${stage.color} ${stage.glow} rounded-sm transition-all duration-500`}
                   style={{ width: `${Math.max(stage.pct, 1)}%` }}
                 />
               </div>
@@ -188,15 +196,17 @@ export default function AnalyticsPage() {
       {/* Stage conversion rates */}
       {data.conversionRates && data.conversionRates.length > 0 && (
         <Card>
-          <h2 className="text-sm font-semibold text-text-primary mb-3">Stage Conversion Rates</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <h2 className="text-xs font-semibold text-text-primary mb-3 uppercase tracking-wider font-data">Stage Conversion Rates</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {data.conversionRates.map((cr) => (
-              <div key={`${cr.from}-${cr.to}`} className="text-center p-3 rounded-lg bg-surface-2">
-                <p className="text-xs text-text-muted mb-1">{cr.from} &rarr; {cr.to}</p>
-                <p className="text-2xl font-bold font-[family-name:var(--font-geist-mono)] text-text-primary">
-                  {(cr.rate * 100).toFixed(0)}%
+              <div key={`${cr.from}-${cr.to}`} className="relative text-center p-4 rounded-md bg-surface-2 border border-border overflow-hidden group hover:border-accent/15 transition-all">
+                <div className="absolute top-0 left-0 w-[2px] h-full bg-accent/30 group-hover:bg-accent/60 transition-colors" />
+                <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-accent/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <p className="text-[10px] text-text-muted mb-1.5 font-data tracking-wider">{cr.from} &rarr; {cr.to}</p>
+                <p className="text-3xl font-light font-data text-text-primary tabular-nums">
+                  {(cr.rate * 100).toFixed(0)}<span className="text-lg text-accent-text">%</span>
                 </p>
-                <p className="text-[10px] text-text-muted mt-1">{cr.numerator} / {cr.denominator}</p>
+                <p className="text-[10px] text-text-muted mt-1.5 font-data tabular-nums">{cr.numerator} / {cr.denominator}</p>
               </div>
             ))}
           </div>
@@ -204,22 +214,22 @@ export default function AnalyticsPage() {
       )}
 
       {/* Two column: Pipeline + Time in Stage */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <Card>
-          <h2 className="text-sm font-semibold text-text-primary mb-3">Pipeline Breakdown</h2>
+          <h2 className="text-xs font-semibold text-text-primary mb-3 uppercase tracking-wider font-data">Pipeline Breakdown</h2>
           <div className="space-y-2">
             {pipelineEntries.map(([label, count]) => {
               const maxCount = Math.max(...pipelineEntries.map(([, c]) => c), 1);
               return (
                 <div key={label} className="flex items-center gap-3">
-                  <span className="text-xs text-text-secondary w-28 shrink-0 truncate">{label}</span>
-                  <div className="flex-1 h-1.5 bg-surface-3 rounded-full overflow-hidden">
+                  <span className="text-xs text-text-secondary w-28 shrink-0 truncate font-data">{label}</span>
+                  <div className="flex-1 h-1.5 bg-surface-3 rounded-sm overflow-hidden">
                     <div
-                      className="h-full bg-accent/60 rounded-full"
+                      className="h-full bg-accent/50 rounded-sm"
                       style={{ width: `${(count / maxCount) * 100}%` }}
                     />
                   </div>
-                  <span className="text-xs font-mono text-text-muted w-8 text-right">{count}</span>
+                  <span className="text-xs font-data text-text-muted w-8 text-right tabular-nums">{count}</span>
                 </div>
               );
             })}
@@ -227,19 +237,19 @@ export default function AnalyticsPage() {
         </Card>
 
         <Card>
-          <h2 className="text-sm font-semibold text-text-primary mb-3">Avg Time in Stage</h2>
+          <h2 className="text-xs font-semibold text-text-primary mb-3 uppercase tracking-wider font-data">Avg Time in Stage</h2>
           {timeEntries.length === 0 ? (
-            <p className="text-sm text-text-muted">Not enough data yet.</p>
+            <p className="text-xs text-text-muted font-data">Not enough data yet.</p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-0.5">
               {timeEntries.map(([stage, info]) => {
                 const days = info.avgHours / 24;
                 return (
-                  <div key={stage} className="flex items-center justify-between py-1.5 border-b border-border last:border-0">
-                    <span className="text-xs text-text-secondary">{stage}</span>
+                  <div key={stage} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                    <span className="text-xs text-text-secondary font-data">{stage}</span>
                     <div className="text-right">
-                      <span className="text-sm font-mono text-text-primary">{days.toFixed(1)}d</span>
-                      <span className="text-[10px] text-text-muted ml-1.5">({info.samples} samples)</span>
+                      <span className="text-sm font-data text-text-primary tabular-nums">{days.toFixed(1)}d</span>
+                      <span className="text-[10px] text-text-muted ml-1.5 font-data">({info.samples})</span>
                     </div>
                   </div>
                 );
@@ -251,7 +261,7 @@ export default function AnalyticsPage() {
 
       {/* Time to outcome */}
       {data.timeToOutcome && (data.timeToOutcome.offerSamples > 0 || data.timeToOutcome.rejectionSamples > 0) && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           {data.timeToOutcome.avgDaysToOffer != null && (
             <StatCard
               label="Avg Days to Offer"
@@ -284,11 +294,11 @@ export default function AnalyticsPage() {
       {/* Source Effectiveness */}
       {data.sourceStats && Object.keys(data.sourceStats).length > 0 && (
         <Card>
-          <h2 className="text-sm font-semibold text-text-primary mb-3">Source Effectiveness</h2>
+          <h2 className="text-xs font-semibold text-text-primary mb-3 uppercase tracking-wider font-data">Source Effectiveness</h2>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <thead>
-                <tr className="text-xs text-text-muted uppercase tracking-wider border-b border-border">
+                <tr className="text-[10px] text-text-muted uppercase tracking-wider border-b border-border font-data">
                   <th className="text-left py-2 pr-4 font-medium">Source</th>
                   <th className="text-right py-2 px-2 font-medium">Total</th>
                   <th className="text-right py-2 px-2 font-medium">Response</th>
@@ -303,11 +313,11 @@ export default function AnalyticsPage() {
                   .map(([source, stats], i) => (
                     <tr key={source} className={`border-b border-border-subtle ${i === 0 ? "bg-accent-muted/30" : ""}`}>
                       <td className="py-2 pr-4 font-medium text-text-primary">{source}</td>
-                      <td className="py-2 px-2 text-right font-mono text-text-secondary">{stats.total}</td>
-                      <td className="py-2 px-2 text-right font-mono text-text-secondary">{stats.responded}</td>
-                      <td className="py-2 px-2 text-right font-mono text-text-secondary">{stats.interviewed}</td>
-                      <td className="py-2 px-2 text-right font-mono text-text-secondary">{stats.offered}</td>
-                      <td className="py-2 pl-2 text-right font-mono text-accent-text font-semibold">
+                      <td className="py-2 px-2 text-right font-data text-text-secondary tabular-nums">{stats.total}</td>
+                      <td className="py-2 px-2 text-right font-data text-text-secondary tabular-nums">{stats.responded}</td>
+                      <td className="py-2 px-2 text-right font-data text-text-secondary tabular-nums">{stats.interviewed}</td>
+                      <td className="py-2 px-2 text-right font-data text-text-secondary tabular-nums">{stats.offered}</td>
+                      <td className="py-2 pl-2 text-right font-data text-accent-text font-semibold tabular-nums">
                         {(stats.responseRate * 100).toFixed(0)}%
                       </td>
                     </tr>
@@ -321,24 +331,24 @@ export default function AnalyticsPage() {
       {/* Resume Performance */}
       {data.resumeStats && data.resumeStats.length > 0 && (
         <Card>
-          <h2 className="text-sm font-semibold text-text-primary mb-3">Resume Performance</h2>
+          <h2 className="text-xs font-semibold text-text-primary mb-3 uppercase tracking-wider font-data">Resume Performance</h2>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <thead>
-                <tr className="text-xs text-text-muted uppercase tracking-wider border-b border-border">
+                <tr className="text-[10px] text-text-muted uppercase tracking-wider border-b border-border font-data">
                   <th className="text-left py-2 pr-4 font-medium">Resume</th>
-                  <th className="text-right py-2 px-2 font-medium">Apps Sent</th>
+                  <th className="text-right py-2 px-2 font-medium">Sent</th>
                   <th className="text-right py-2 px-2 font-medium">Responded</th>
-                  <th className="text-right py-2 pl-2 font-medium">Response Rate</th>
+                  <th className="text-right py-2 pl-2 font-medium">Rate</th>
                 </tr>
               </thead>
               <tbody>
                 {data.resumeStats.map((rs, i) => (
                   <tr key={rs.resumeId} className={`border-b border-border-subtle ${i === 0 ? "bg-positive-muted/30" : ""}`}>
                     <td className="py-2 pr-4 font-medium text-text-primary">{rs.resumeLabel}</td>
-                    <td className="py-2 px-2 text-right font-mono text-text-secondary">{rs.total}</td>
-                    <td className="py-2 px-2 text-right font-mono text-text-secondary">{rs.responded}</td>
-                    <td className="py-2 pl-2 text-right font-mono text-positive font-semibold">
+                    <td className="py-2 px-2 text-right font-data text-text-secondary tabular-nums">{rs.total}</td>
+                    <td className="py-2 px-2 text-right font-data text-text-secondary tabular-nums">{rs.responded}</td>
+                    <td className="py-2 pl-2 text-right font-data text-positive font-semibold tabular-nums">
                       {(rs.responseRate * 100).toFixed(0)}%
                     </td>
                   </tr>
@@ -352,16 +362,16 @@ export default function AnalyticsPage() {
       {/* Application Velocity */}
       {data.velocity && data.velocity.length > 0 && (
         <Card>
-          <h2 className="text-sm font-semibold text-text-primary mb-3">Application Velocity (12 weeks)</h2>
+          <h2 className="text-xs font-semibold text-text-primary mb-3 uppercase tracking-wider font-data">Application Velocity (12 weeks)</h2>
           <div className="flex items-end gap-1 h-[140px]">
             {data.velocity.map((week, i) => (
               <div key={i} className="flex-1 flex flex-col items-center justify-end h-full gap-1">
-                <span className="text-[10px] font-mono text-text-muted">{week.count || ""}</span>
+                <span className="text-[10px] font-data text-text-muted tabular-nums">{week.count || ""}</span>
                 <div
-                  className="w-full rounded-t-sm bg-info/50 transition-all duration-300"
+                  className="w-full rounded-t-sm bg-info/40 transition-all duration-300"
                   style={{ height: `${Math.max((week.count / maxVelocity) * 100, 3)}%`, minHeight: 3 }}
                 />
-                <span className="text-[8px] text-text-muted truncate w-full text-center">{week.weekLabel}</span>
+                <span className="text-[7px] text-text-muted truncate w-full text-center font-data">{week.weekLabel}</span>
               </div>
             ))}
           </div>
@@ -370,15 +380,15 @@ export default function AnalyticsPage() {
 
       {/* Sankey Chart */}
       <Card>
-        <h2 className="text-sm font-semibold text-text-primary mb-3">Application Flow</h2>
+        <h2 className="text-xs font-semibold text-text-primary mb-3 uppercase tracking-wider font-data">Application Flow</h2>
         {chartErr && <ErrorBanner message={chartErr} className="mb-3" />}
         {data.sankey.googleChartRows.length === 0 ? (
-          <p className="text-sm text-text-muted py-4">No transitions recorded yet.</p>
+          <p className="text-xs text-text-muted py-4 font-data">No transitions recorded yet.</p>
         ) : (
           <div
             id="sankey-chart"
-            className="w-full rounded-lg overflow-hidden"
-            style={{ minHeight: 460, background: "#0f1218" }}
+            className="w-full rounded-md overflow-hidden"
+            style={{ minHeight: 460, background: "#0b0f18" }}
           />
         )}
       </Card>
@@ -386,11 +396,11 @@ export default function AnalyticsPage() {
       {/* SankeyMATIC Export */}
       {data.sankey.sankeymaticText && (
         <Card>
-          <h2 className="text-sm font-semibold text-text-primary mb-3">SankeyMATIC Export</h2>
+          <h2 className="text-xs font-semibold text-text-primary mb-3 uppercase tracking-wider font-data">SankeyMATIC Export</h2>
           <textarea
             readOnly
             value={data.sankey.sankeymaticText}
-            className="w-full min-h-[140px] bg-surface-2 text-text-secondary text-xs font-mono border border-border rounded-lg p-3 resize-y focus-ring"
+            className="w-full min-h-[140px] bg-surface-2 text-text-secondary text-xs font-data border border-border rounded-md p-3 resize-y focus-ring"
           />
         </Card>
       )}

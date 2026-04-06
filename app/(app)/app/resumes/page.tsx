@@ -99,9 +99,10 @@ export default function ResumesPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-bold text-text-primary tracking-tight">Resumes</h1>
-        <p className="text-sm text-text-muted mt-0.5">{items.length} resume{items.length !== 1 ? "s" : ""} uploaded</p>
+      <div className="pb-5 border-b border-white/5">
+        <div className="section-index text-purple mb-2">04 / Documents</div>
+        <h1 className="text-2xl font-display text-text-primary">Resumes</h1>
+        <p className="font-data text-[9px] text-text-muted mt-1 uppercase tracking-widest">{items.length} resume{items.length !== 1 ? "s" : ""} uploaded</p>
       </div>
 
       {/* Upload form */}
@@ -114,7 +115,7 @@ export default function ResumesPage() {
             onChange={(e) => setLabel(e.target.value)}
           />
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-text-secondary tracking-wide uppercase">PDF File</label>
+            <label className="text-[10px] font-medium text-text-muted tracking-[0.1em] uppercase font-data">PDF File</label>
             <input
               id="resume-file-input"
               type="file"

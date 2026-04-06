@@ -41,3 +41,11 @@ yarn-error.log*
 next-env.d.ts
 
 /app/generated/prisma
+.aidesigner/*
+!.aidesigner/.gitkeep
+.agents/
+.claude/
+.devcontainer/
+.mcp.json
+.planning/
+skills-lock.json

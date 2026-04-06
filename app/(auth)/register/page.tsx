@@ -48,36 +48,38 @@ export default function RegisterPage() {
       return;
     }
 
-    // Auto-login
     await signIn("credentials", { email, password, callbackUrl: "/app" });
   }
 
   return (
     <div className="auth-container">
-      <div className="w-full max-w-[400px]">
+      <div className="ambient-mesh" />
+      <div className="fixed inset-0 pointer-events-none grid-bg opacity-10 z-0" />
+
+      <div className="w-full max-w-[380px] relative z-10">
         {/* Logo */}
-        <div className="flex items-center gap-2.5 mb-8">
-          <span className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center text-sm font-bold text-surface-0 shadow-[0_0_16px_rgba(45,212,191,0.25)]">
-            JT
+        <div className="flex items-center gap-3 mb-10">
+          <div className="w-3 h-3 bg-accent animate-glow-pulse" />
+          <span className="font-data text-sm tracking-[0.2em] font-medium text-text-primary uppercase">
+            MKVDATA
           </span>
-          <span className="text-lg font-semibold text-text-primary tracking-tight">JobTracker</span>
         </div>
 
-        <h1 className="text-2xl font-bold text-text-primary tracking-tight mb-1">Create your account</h1>
-        <p className="text-sm text-text-muted mb-6">Start tracking your job search today</p>
+        <h1 className="text-3xl font-display text-text-primary mb-1">Create your account</h1>
+        <p className="text-xs text-text-muted mb-8 font-data uppercase tracking-widest">Initialize your analytics terminal</p>
 
         {/* OAuth buttons */}
-        <div className="grid gap-2.5 mb-6">
+        <div className="grid gap-2 mb-6">
           <button
             onClick={() => signIn("google", { callbackUrl: "/app" })}
-            className="flex items-center justify-center gap-3 w-full px-4 py-2.5 rounded-lg bg-surface-2 border border-border text-sm font-medium text-text-primary hover:bg-surface-3 hover:border-border-strong transition-all cursor-pointer"
+            className="flex items-center justify-center gap-3 w-full px-4 py-3 bg-surface-2 border border-white/5 text-sm font-medium text-text-primary hover:bg-surface-3 hover:border-white/10 transition-all cursor-pointer"
           >
             <GoogleIcon />
             Continue with Google
           </button>
           <button
             onClick={() => signIn("github", { callbackUrl: "/app", prompt: "login" })}
-            className="flex items-center justify-center gap-3 w-full px-4 py-2.5 rounded-lg bg-surface-2 border border-border text-sm font-medium text-text-primary hover:bg-surface-3 hover:border-border-strong transition-all cursor-pointer"
+            className="flex items-center justify-center gap-3 w-full px-4 py-3 bg-surface-2 border border-white/5 text-sm font-medium text-text-primary hover:bg-surface-3 hover:border-white/10 transition-all cursor-pointer"
           >
             <GitHubIcon />
             Continue with GitHub
@@ -86,15 +88,15 @@ export default function RegisterPage() {
 
         {/* Divider */}
         <div className="flex items-center gap-4 mb-6">
-          <div className="flex-1 h-px bg-border" />
-          <span className="text-xs text-text-muted uppercase tracking-wider">or</span>
-          <div className="flex-1 h-px bg-border" />
+          <div className="flex-1 h-px bg-white/5" />
+          <span className="font-data text-[9px] text-text-muted uppercase tracking-widest">or</span>
+          <div className="flex-1 h-px bg-white/5" />
         </div>
 
         {/* Registration form */}
         <form onSubmit={onRegister} className="space-y-4">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="email" className="text-xs font-medium text-text-secondary tracking-wide uppercase">Email</label>
+            <label htmlFor="email" className="font-data text-[9px] font-medium text-text-muted tracking-widest uppercase">Email</label>
             <input
               id="email"
               type="email"
@@ -103,12 +105,12 @@ export default function RegisterPage() {
               autoComplete="email"
               required
               placeholder="you@example.com"
-              className="w-full bg-surface-1 text-text-primary border border-border rounded-lg px-3 py-2.5 text-sm placeholder:text-text-muted transition-colors focus-ring hover:border-border-strong focus:border-accent/40"
+              className="w-full bg-surface-1 text-text-primary border border-white/5 px-4 py-3 text-sm placeholder:text-text-muted transition-colors focus-ring hover:border-white/10 focus:border-accent/40 font-data"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="password" className="text-xs font-medium text-text-secondary tracking-wide uppercase">Password</label>
+            <label htmlFor="password" className="font-data text-[9px] font-medium text-text-muted tracking-widest uppercase">Password</label>
             <input
               id="password"
               type="password"
@@ -118,26 +120,26 @@ export default function RegisterPage() {
               minLength={8}
               required
               placeholder="Minimum 8 characters"
-              className="w-full bg-surface-1 text-text-primary border border-border rounded-lg px-3 py-2.5 text-sm placeholder:text-text-muted transition-colors focus-ring hover:border-border-strong focus:border-accent/40"
+              className="w-full bg-surface-1 text-text-primary border border-white/5 px-4 py-3 text-sm placeholder:text-text-muted transition-colors focus-ring hover:border-white/10 focus:border-accent/40 font-data"
             />
           </div>
 
           <button
             type="submit"
             disabled={busy}
-            className="w-full px-4 py-2.5 rounded-lg bg-accent text-surface-0 text-sm font-semibold hover:bg-accent-hover transition-all shadow-[0_1px_12px_rgba(45,212,191,0.2)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            className="w-full px-4 py-3 bg-accent text-surface-0 text-[11px] font-data font-bold uppercase tracking-widest hover:bg-accent-hover transition-all shadow-[0_0_16px_rgba(0,212,255,0.2)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
           >
             {busy ? "Creating account..." : "Create account"}
           </button>
 
           {err && (
-            <div className="px-4 py-3 bg-negative-muted border border-negative/20 rounded-lg text-sm text-negative animate-fade-in">
+            <div className="px-3 py-2.5 bg-negative-muted border border-negative/20 text-xs text-negative animate-fade-in font-data">
               {err}
             </div>
           )}
         </form>
 
-        <p className="mt-6 text-sm text-text-muted text-center">
+        <p className="mt-8 text-xs text-text-muted text-center font-data">
           Already have an account?{" "}
           <Link href="/login" className="text-accent hover:text-accent-hover transition-colors font-medium">
             Sign in

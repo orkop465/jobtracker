@@ -10,8 +10,8 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
 const paddingClasses = {
   none: "",
   sm: "p-3",
-  md: "p-4",
-  lg: "p-6",
+  md: "p-5",
+  lg: "p-8",
 };
 
 const Card = forwardRef<HTMLDivElement, CardProps>(
@@ -21,10 +21,9 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
         ref={ref}
         className={`
           relative
-          bg-surface-1 border border-border rounded-xl
-          noise-texture
+          gradient-border-card
           ${paddingClasses[padding]}
-          ${hoverable ? "transition-all duration-200 hover:border-border-strong hover:bg-surface-2 cursor-pointer" : ""}
+          ${hoverable ? "transition-all duration-200 hover:shadow-[0_4px_24px_-4px_rgba(0,212,255,0.08)] cursor-pointer group" : ""}
           ${className}
         `}
         {...props}

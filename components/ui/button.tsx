@@ -13,7 +13,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<Variant, string> = {
   primary:
-    "bg-accent text-surface-0 font-semibold hover:bg-accent-hover active:scale-[0.98] shadow-[0_1px_12px_rgba(45,212,191,0.2)]",
+    "bg-accent text-surface-0 font-bold hover:bg-accent-hover active:scale-[0.98] shadow-[0_0_16px_rgba(0,212,255,0.2)]",
   secondary:
     "bg-surface-3 text-text-primary border border-border-strong hover:bg-surface-4 active:scale-[0.98]",
   danger:
@@ -23,9 +23,9 @@ const variantClasses: Record<Variant, string> = {
 };
 
 const sizeClasses: Record<Size, string> = {
-  sm: "px-3 py-1.5 text-xs rounded-md gap-1.5",
-  md: "px-4 py-2 text-sm rounded-lg gap-2",
-  lg: "px-6 py-2.5 text-sm rounded-lg gap-2",
+  sm: "px-3 py-1.5 text-[10px] rounded-[2px] gap-1.5",
+  md: "px-5 py-2.5 text-[11px] rounded-[2px] gap-2",
+  lg: "px-7 py-3 text-xs rounded-[2px] gap-2",
 };
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -36,8 +36,8 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled || loading}
         className={`
           inline-flex items-center justify-center
-          font-medium tracking-tight
-          transition-all duration-150 ease-out
+          font-data font-medium uppercase tracking-wider
+          transition-all duration-200 ease-out
           focus-ring cursor-pointer
           disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed
           ${variantClasses[variant]}

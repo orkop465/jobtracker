@@ -197,11 +197,12 @@ export default function ApplicationsPage() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between pb-5 border-b border-white/5 mb-1">
         <div>
-          <h1 className="text-xl font-bold text-text-primary tracking-tight">Applications</h1>
-          <p className="text-sm text-text-muted mt-0.5">
-            {items.length} total{filteredItems.length !== items.length ? `, ${filteredItems.length} matching` : ""}
+          <div className="section-index text-orange mb-2">03 / Pipeline</div>
+          <h1 className="text-2xl font-display text-text-primary">Applications</h1>
+          <p className="font-data text-[9px] text-text-muted mt-1 uppercase tracking-widest">
+            {items.length} total{filteredItems.length !== items.length ? ` / ${filteredItems.length} matching` : ""}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -326,7 +327,7 @@ export default function ApplicationsPage() {
 
                   {/* Right: meta + quick status */}
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    <span className="text-[11px] text-text-muted font-mono">
+                    <span className="text-[11px] text-text-muted font-data tabular-nums">
                       {new Date(a.appliedAt).toLocaleDateString()}
                     </span>
                     <select

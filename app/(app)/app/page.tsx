@@ -71,14 +71,14 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-text-muted text-sm animate-pulse">Loading dashboard...</div>
+        <div className="text-text-muted text-sm animate-pulse font-data">Initializing terminal...</div>
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div className="text-center text-text-muted py-20">Failed to load dashboard data.</div>
+      <div className="text-center text-text-muted py-20 font-data">Failed to load dashboard data.</div>
     );
   }
 
@@ -89,9 +89,15 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-text-primary tracking-tight">Dashboard</h1>
-        <p className="text-sm text-text-muted mt-1">Your job search at a glance</p>
+      <div className="flex items-end justify-between pb-6 border-b border-white/5">
+        <div>
+          <div className="section-index text-accent mb-2">01 / Overview</div>
+          <h1 className="text-3xl font-display text-text-primary">Dashboard</h1>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-1 border border-white/5">
+          <div className="w-1.5 h-1.5 bg-positive shadow-[0_0_6px_rgba(0,255,136,0.6)]" />
+          <span className="font-data text-[9px] text-text-secondary uppercase tracking-widest">Live</span>
+        </div>
       </div>
 
       {/* Stat cards */}
@@ -104,28 +110,28 @@ export default function DashboardPage() {
 
       {/* Needs Attention */}
       {hasAttention && (
-        <Card className="border-warning/20 bg-warning-muted/30">
+        <Card className="border-l-2 border-l-warning/40">
           <div className="flex items-center gap-2 mb-4">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-warning">
-              <path d="M8 2l6 11H2L8 2zM8 6.5v3M8 11.5v0" />
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-warning">
+              <path d="M7 2l5.5 9.5H1.5L7 2zM7 5.5v2.5M7 10v0" />
             </svg>
-            <h2 className="text-sm font-semibold text-text-primary">Needs Attention</h2>
+            <h2 className="font-data text-[10px] font-bold text-text-primary uppercase tracking-widest">Needs Attention</h2>
           </div>
 
           {data.needsAttention.staleApps.length > 0 && (
             <div className="mb-4">
-              <p className="text-xs text-text-muted uppercase font-medium mb-2">Stale Applications</p>
-              <div className="space-y-1">
+              <p className="font-data text-[9px] text-text-muted uppercase mb-2 tracking-widest">Stale Applications</p>
+              <div className="space-y-0.5">
                 {data.needsAttention.staleApps.map((a) => (
                   <Link
                     key={a.id}
                     href="/app/applications"
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-surface-3 transition-colors text-sm"
+                    className="flex items-center gap-3 px-3 py-2 hover:bg-white/[0.02] transition-colors text-xs"
                   >
                     <span className="text-text-primary font-medium truncate">{a.company}</span>
                     <span className="text-text-muted truncate">{a.roleTitle}</span>
                     <Badge variant={statusToBadgeVariant(a.status)} className="ml-auto shrink-0">{a.statusLabel}</Badge>
-                    <span className="text-xs text-warning font-mono shrink-0">{a.daysSinceUpdate}d ago</span>
+                    <span className="text-warning font-data shrink-0">{a.daysSinceUpdate}d</span>
                   </Link>
                 ))}
               </div>
@@ -134,18 +140,18 @@ export default function DashboardPage() {
 
           {data.needsAttention.overdueFollowUps.length > 0 && (
             <div>
-              <p className="text-xs text-text-muted uppercase font-medium mb-2">Overdue Follow-ups</p>
-              <div className="space-y-1">
+              <p className="font-data text-[9px] text-text-muted uppercase mb-2 tracking-widest">Overdue Follow-ups</p>
+              <div className="space-y-0.5">
                 {data.needsAttention.overdueFollowUps.map((a) => (
                   <Link
                     key={a.id}
                     href="/app/applications"
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-surface-3 transition-colors text-sm"
+                    className="flex items-center gap-3 px-3 py-2 hover:bg-white/[0.02] transition-colors text-xs"
                   >
                     <span className="text-text-primary font-medium truncate">{a.company}</span>
                     <span className="text-text-muted truncate">{a.roleTitle}</span>
-                    <span className="ml-auto text-xs text-negative font-mono shrink-0">
-                      Due {new Date(a.nextFollowUp).toLocaleDateString()}
+                    <span className="ml-auto text-negative font-data shrink-0">
+                      {new Date(a.nextFollowUp).toLocaleDateString()}
                     </span>
                   </Link>
                 ))}
@@ -158,19 +164,31 @@ export default function DashboardPage() {
       {/* Two-column: Activity + Velocity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Recent Activity */}
-        <Card>
-          <h2 className="text-sm font-semibold text-text-primary mb-3">Recent Activity</h2>
+        <Card padding="none">
+          <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-white/5">
+            <h2 className="font-data text-[10px] font-bold text-text-primary uppercase tracking-widest">Recent Activity</h2>
+          </div>
           {data.recentActivity.length === 0 ? (
-            <p className="text-sm text-text-muted py-4">No recent status changes</p>
+            <p className="text-xs text-text-muted px-5 py-6 font-data">No recent status changes</p>
           ) : (
-            <div className="space-y-1.5">
+            <div>
+              <div className="grid grid-cols-[2fr_3fr_auto] px-5 py-2 font-data text-[9px] font-medium text-text-muted uppercase tracking-widest border-b border-white/[0.03]">
+                <span>Company</span>
+                <span>Status Change</span>
+                <span>Date</span>
+              </div>
               {data.recentActivity.map((ev) => (
-                <div key={ev.id} className="flex items-center gap-2 text-xs py-1.5">
-                  <span className="text-text-primary font-medium truncate max-w-[120px]">{ev.company}</span>
-                  <span className="text-text-muted">{ev.fromStatus}</span>
-                  <span className="text-text-muted">&rarr;</span>
-                  <span className="text-text-secondary">{ev.toStatus}</span>
-                  <span className="ml-auto text-text-muted font-mono text-[10px] shrink-0">
+                <div key={ev.id} className="grid grid-cols-[2fr_3fr_auto] items-center px-5 py-3 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.015] transition-colors">
+                  <div className="flex flex-col">
+                    <span className="text-xs text-text-primary font-medium truncate">{ev.company}</span>
+                    <span className="font-data text-[10px] text-text-muted truncate">{ev.roleTitle}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-1.5 py-0.5 bg-surface-3 border border-white/5 font-data text-[9px] text-text-muted truncate max-w-[80px]">{ev.fromStatus}</span>
+                    <span className="text-accent text-[10px]">&rarr;</span>
+                    <span className="px-1.5 py-0.5 bg-accent/8 border border-accent/15 font-data text-[9px] text-accent truncate max-w-[80px]">{ev.toStatus}</span>
+                  </div>
+                  <span className="font-data text-[10px] text-text-muted tabular-nums whitespace-nowrap">
                     {new Date(ev.occurredAt).toLocaleDateString()}
                   </span>
                 </div>
@@ -180,29 +198,54 @@ export default function DashboardPage() {
         </Card>
 
         {/* Application Velocity */}
-        <Card>
-          <h2 className="text-sm font-semibold text-text-primary mb-3">Weekly Velocity</h2>
-          <div className="flex items-end gap-1.5 h-[120px]">
-            {data.velocity.map((week, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center justify-end h-full gap-1">
-                <span className="text-[10px] font-mono text-text-muted">{week.count}</span>
-                <div
-                  className="w-full rounded-t-sm bg-accent/60 transition-all duration-300"
-                  style={{
-                    height: `${Math.max((week.count / maxVelocity) * 100, 4)}%`,
-                    minHeight: 4,
-                  }}
-                />
-                <span className="text-[9px] text-text-muted truncate w-full text-center">{week.weekLabel}</span>
+        <Card padding="none">
+          <div className="px-5 pt-5 pb-3 border-b border-white/5 flex items-start justify-between">
+            <div>
+              <h2 className="font-data text-[10px] font-bold text-text-primary uppercase tracking-widest">Weekly Velocity</h2>
+              <p className="font-data text-[9px] text-text-muted mt-0.5 uppercase tracking-widest">Applications / week</p>
+            </div>
+            <div className="text-right">
+              <span className="text-2xl font-display text-text-primary tabular-nums leading-none">
+                {data.velocity.reduce((s, v) => s + v.count, 0)}
+              </span>
+              <p className="font-data text-[9px] text-text-muted mt-0.5">total</p>
+            </div>
+          </div>
+          <div className="px-5 pb-5 pt-4">
+            <div className="relative h-[100px] flex items-end gap-1">
+              {/* Grid lines */}
+              <div className="absolute inset-x-0 top-0 bottom-0 flex flex-col justify-between pointer-events-none">
+                <div className="border-t border-white/[0.04] w-full" />
+                <div className="border-t border-white/[0.04] w-full" />
+                <div className="border-t border-white/[0.04] w-full" />
               </div>
-            ))}
+              {data.velocity.map((week, i) => {
+                const isMax = week.count === maxVelocity && week.count > 0;
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center justify-end h-full gap-0.5 relative z-10">
+                    <span className="font-data text-[8px] text-text-muted tabular-nums">{week.count || ""}</span>
+                    <div
+                      className={`w-full transition-all duration-300 ${isMax ? "bg-accent shadow-[0_-4px_12px_rgba(0,212,255,0.2)]" : "bg-accent/25 hover:bg-accent/45"}`}
+                      style={{ height: `${Math.max((week.count / maxVelocity) * 100, 3)}%`, minHeight: 3 }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-1 mt-2">
+              {data.velocity.map((week, i) => (
+                <div key={i} className="flex-1 text-center">
+                  <span className="font-data text-[7px] text-text-muted truncate">{week.weekLabel}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </Card>
       </div>
 
       {/* Quick Add */}
       <Card>
-        <h2 className="text-sm font-semibold text-text-primary mb-3">Quick Add Application</h2>
+        <h2 className="font-data text-[10px] font-bold text-text-primary mb-4 uppercase tracking-widest">Quick Add Application</h2>
         <QuickAddForm resumes={resumes} onCreated={fetchAll} />
       </Card>
     </div>
