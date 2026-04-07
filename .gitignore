@@ -45,6 +45,7 @@ next-env.d.ts
 !.aidesigner/.gitkeep
 .agents/
 .claude/
+.superpowers/
 .devcontainer/
 .mcp.json
 .planning/
