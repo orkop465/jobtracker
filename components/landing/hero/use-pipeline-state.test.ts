@@ -87,4 +87,16 @@ describe('pipelineReducer', () => {
     // Complete is not given a timestamp; use now=0 default (consumer passes current time)
     expect(s.lastFlash.screen?.kind).toBe('up');
   });
+
+  it('arriveDirectly increments count and records an up flash without a flying entry', () => {
+    const s0 = initialPipelineState(0);
+    const s1 = pipelineReducer(s0, {
+      type: 'arriveDirectly',
+      column: 'applied',
+      now: 2000,
+    });
+    expect(s1.counts.applied).toBe(HERO_BASELINE_COUNTS.applied + 1);
+    expect(s1.flying).toHaveLength(0);
+    expect(s1.lastFlash.applied).toEqual({ kind: 'up', at: 2000 });
+  });
 });

@@ -29,7 +29,8 @@ export type PipelineAction =
       pathName: string;
       now: number;
     }
-  | { type: 'completeTransition'; cardId: string; now?: number };
+  | { type: 'completeTransition'; cardId: string; now?: number }
+  | { type: 'arriveDirectly'; column: HeroStage; now: number };
 
 export function initialPipelineState(cycleStartedAt: number): PipelineState {
   return {
@@ -107,6 +108,22 @@ export function pipelineReducer(state: PipelineState, action: PipelineAction): P
         counts,
         flying: state.flying.filter((f) => f.cardId !== action.cardId),
         lastFlash,
+      };
+    }
+
+    case 'arriveDirectly': {
+      // Fresh arrival with no flight animation (used for inflow → applied so
+      // new cards materialize inside the column instead of sliding in from
+      // off-screen). Increments count and records an "up" flash.
+      const counts = { ...state.counts };
+      counts[action.column] = counts[action.column] + 1;
+      return {
+        ...state,
+        counts,
+        lastFlash: {
+          ...state.lastFlash,
+          [action.column]: { kind: 'up', at: action.now },
+        },
       };
     }
 
