@@ -69,25 +69,37 @@ export const ROTATING_CAPTIONS: readonly string[] = [
   'Resume A/B testing built in',
 ] as const;
 
-/** The 10 stages of the full pipeline (anatomy section, §5.3). */
+/**
+ * The 10 stages of the full pipeline (anatomy section, §5.3).
+ *
+ * Variants:
+ *   - `advance`: normal middle stage; shows "X% advance rate" + days.
+ *   - `end`:     Offer — positive end of pipeline; no percentage.
+ *   - `closed`:  Rejected / Withdrawn / Ghosted — application is closed.
+ *
+ * The advance rates multiply to ~1.18% (≈ 4 offers from 342 applications),
+ * matching the hero headline "342 applications in. 4 offers out."
+ * Math: 0.25 · 0.60 · 0.55 · 0.55 · 0.58 · 0.45 ≈ 0.01184.
+ */
 export interface AnatomyStage {
   key: string;
   label: string;
-  terminal: boolean;
-  /** Median conversion rate as a decimal 0-1. Null for terminal stages. */
+  variant: 'advance' | 'end' | 'closed';
+  /** Decimal 0-1. Only present for variant 'advance'. */
   medianConversion: number | null;
+  /** Median days a card sits in this stage. Only present for non-closed. */
   medianDaysInStage: number | null;
 }
 
 export const ANATOMY_STAGES: readonly AnatomyStage[] = [
-  { key: 'APPLIED',          label: 'Applied',          terminal: false, medianConversion: 0.25, medianDaysInStage: 5 },
-  { key: 'RECRUITER_SCREEN', label: 'Recruiter Screen', terminal: false, medianConversion: 0.71, medianDaysInStage: 3 },
-  { key: 'OA',               label: 'OA',               terminal: false, medianConversion: 0.54, medianDaysInStage: 4 },
-  { key: 'INTERVIEW_ROUND_1',label: 'Interview R1',     terminal: false, medianConversion: 0.45, medianDaysInStage: 6 },
-  { key: 'INTERVIEW_ROUND_2',label: 'Interview R2',     terminal: false, medianConversion: 0.38, medianDaysInStage: 9 },
-  { key: 'INTERVIEW_ROUND_3',label: 'Interview R3',     terminal: false, medianConversion: 0.44, medianDaysInStage: 7 },
-  { key: 'OFFER',            label: 'Offer',            terminal: false, medianConversion: 1.0,  medianDaysInStage: 2 },
-  { key: 'REJECTED',         label: 'Rejected',         terminal: true,  medianConversion: null, medianDaysInStage: null },
-  { key: 'WITHDRAWN',        label: 'Withdrawn',        terminal: true,  medianConversion: null, medianDaysInStage: null },
-  { key: 'GHOSTED',          label: 'Ghosted',          terminal: true,  medianConversion: null, medianDaysInStage: null },
+  { key: 'APPLIED',           label: 'Applied',          variant: 'advance', medianConversion: 0.25, medianDaysInStage: 5 },
+  { key: 'RECRUITER_SCREEN',  label: 'Recruiter Screen', variant: 'advance', medianConversion: 0.60, medianDaysInStage: 3 },
+  { key: 'OA',                label: 'OA',               variant: 'advance', medianConversion: 0.55, medianDaysInStage: 4 },
+  { key: 'INTERVIEW_ROUND_1', label: 'Interview R1',     variant: 'advance', medianConversion: 0.55, medianDaysInStage: 6 },
+  { key: 'INTERVIEW_ROUND_2', label: 'Interview R2',     variant: 'advance', medianConversion: 0.58, medianDaysInStage: 9 },
+  { key: 'INTERVIEW_ROUND_3', label: 'Interview R3',     variant: 'advance', medianConversion: 0.45, medianDaysInStage: 7 },
+  { key: 'OFFER',             label: 'Offer',            variant: 'end',     medianConversion: null, medianDaysInStage: 2 },
+  { key: 'REJECTED',          label: 'Rejected',         variant: 'closed',  medianConversion: null, medianDaysInStage: null },
+  { key: 'WITHDRAWN',         label: 'Withdrawn',        variant: 'closed',  medianConversion: null, medianDaysInStage: null },
+  { key: 'GHOSTED',           label: 'Ghosted',          variant: 'closed',  medianConversion: null, medianDaysInStage: null },
 ] as const;
