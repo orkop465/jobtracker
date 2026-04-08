@@ -1,13 +1,14 @@
-"use client";
+'use client';
 
-import { signIn } from "next-auth/react";
-import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
-import Link from "next/link";
+import { signIn } from 'next-auth/react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useState, type FormEvent } from 'react';
+import Link from 'next/link';
+import { AuthShell } from '@/components/auth/auth-shell';
 
 function GoogleIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18">
+    <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true">
       <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4" />
       <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853" />
       <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05" />
@@ -18,7 +19,7 @@ function GoogleIcon() {
 
 function GitHubIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
+    <svg width="16" height="16" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
       <path d="M9 0C4.03 0 0 4.03 0 9c0 3.978 2.579 7.35 6.154 8.543.45.083.614-.195.614-.433 0-.214-.008-.78-.012-1.531-2.503.544-3.032-1.206-3.032-1.206-.41-1.04-1-1.317-1-1.317-.816-.558.062-.546.062-.546.903.063 1.378.927 1.378.927.803 1.375 2.107.978 2.62.748.082-.581.314-.978.571-1.203-1.999-.227-4.1-1-4.1-4.449 0-.983.351-1.786.927-2.416-.093-.228-.402-1.143.088-2.382 0 0 .756-.242 2.475.923A8.63 8.63 0 019 4.363c.765.004 1.535.103 2.254.303 1.718-1.165 2.472-.923 2.472-.923.491 1.24.182 2.154.09 2.382.577.63.925 1.433.925 2.416 0 3.458-2.104 4.219-4.11 4.441.324.278.612.828.612 1.668 0 1.203-.011 2.175-.011 2.471 0 .24.162.52.619.432C15.424 16.347 18 12.975 18 9c0-4.97-4.03-9-9-9z" />
     </svg>
   );
@@ -26,149 +27,158 @@ function GitHubIcon() {
 
 function LoginContent() {
   const sp = useSearchParams();
-  const callbackUrl = sp.get("callbackUrl") ?? "/app";
-  const oauthError = sp.get("error");
+  const callbackUrl = sp.get('callbackUrl') ?? '/app';
+  const oauthError = sp.get('error');
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  async function onCredentials(e: React.FormEvent) {
+  // Custom credentials POST flow — uses NextAuth's CSRF + callback endpoints
+  // directly so the session cookie is set by the server. Preserved verbatim
+  // from the previous implementation; only the visual layer changes.
+  async function onCredentials(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErr(null);
     setBusy(true);
     try {
-      const csrfRes = await fetch("/api/auth/csrf");
+      const csrfRes = await fetch('/api/auth/csrf');
       const { csrfToken } = await csrfRes.json();
 
-      await fetch("/api/auth/callback/credentials", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      await fetch('/api/auth/callback/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ csrfToken, email, password }),
       });
 
-      const sessionRes = await fetch("/api/auth/session");
+      const sessionRes = await fetch('/api/auth/session');
       const session = await sessionRes.json();
       if (session?.user) {
         window.location.href = callbackUrl;
         return;
       }
-      setErr("Invalid email or password.");
+      setErr('Invalid email or password.');
     } catch {
-      setErr("Something went wrong. Please try again.");
+      setErr('Something went wrong. Please try again.');
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="auth-container">
-      <div className="ambient-mesh" />
-      <div className="fixed inset-0 pointer-events-none grid-bg opacity-10 z-0" />
-
-      <div className="w-full max-w-[380px] relative z-10">
-        {/* Logo */}
-        <div className="flex items-center gap-3 mb-10">
-          <div className="w-3 h-3 bg-accent animate-glow-pulse" />
-          <span className="font-data text-sm tracking-[0.2em] font-medium text-text-primary uppercase">
-            MKVDATA
-          </span>
-        </div>
-
-        <h1 className="text-3xl font-display text-text-primary mb-1">Welcome back</h1>
-        <p className="text-xs text-text-muted mb-8 font-data uppercase tracking-widest">Sign in to access your terminal</p>
-
-        {oauthError === "OAuthAccountNotLinked" && (
-          <div className="mb-4 px-3 py-2.5 bg-negative-muted border border-negative/20 text-xs text-negative font-data">
-            This provider account is attached to a different app account. Use the same provider you originally used.
-          </div>
-        )}
-
-        {/* OAuth buttons */}
-        <div className="grid gap-2 mb-6">
-          <button
-            onClick={() => signIn("google", { callbackUrl })}
-            className="flex items-center justify-center gap-3 w-full px-4 py-3 bg-surface-2 border border-white/5 text-sm font-medium text-text-primary hover:bg-surface-3 hover:border-white/10 transition-all cursor-pointer"
-          >
-            <GoogleIcon />
-            Continue with Google
-          </button>
-          <button
-            onClick={() => signIn("github", { callbackUrl, prompt: "login" })}
-            className="flex items-center justify-center gap-3 w-full px-4 py-3 bg-surface-2 border border-white/5 text-sm font-medium text-text-primary hover:bg-surface-3 hover:border-white/10 transition-all cursor-pointer"
-          >
-            <GitHubIcon />
-            Continue with GitHub
-          </button>
-        </div>
-
-        {/* Divider */}
-        <div className="flex items-center gap-4 mb-6">
-          <div className="flex-1 h-px bg-white/5" />
-          <span className="font-data text-[9px] text-text-muted uppercase tracking-widest">or</span>
-          <div className="flex-1 h-px bg-white/5" />
-        </div>
-
-        {/* Credentials form */}
-        <form onSubmit={onCredentials} className="space-y-4">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="email" className="font-data text-[9px] font-medium text-text-muted tracking-widest uppercase">Email</label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              required
-              placeholder="you@example.com"
-              className="w-full bg-surface-1 text-text-primary border border-white/5 px-4 py-3 text-sm placeholder:text-text-muted transition-colors focus-ring hover:border-white/10 focus:border-accent/40 font-data"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="password" className="font-data text-[9px] font-medium text-text-muted tracking-widest uppercase">Password</label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-              placeholder="Your password"
-              className="w-full bg-surface-1 text-text-primary border border-white/5 px-4 py-3 text-sm placeholder:text-text-muted transition-colors focus-ring hover:border-white/10 focus:border-accent/40 font-data"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full px-4 py-3 bg-accent text-surface-0 text-[11px] font-data font-bold uppercase tracking-widest hover:bg-accent-hover transition-all shadow-[0_0_16px_rgba(0,212,255,0.2)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-          >
-            {busy ? "Signing in..." : "Sign in"}
-          </button>
-
-          {err && (
-            <div className="px-3 py-2.5 bg-negative-muted border border-negative/20 text-xs text-negative animate-fade-in font-data">
-              {err}
-            </div>
-          )}
-        </form>
-
-        <p className="mt-8 text-xs text-text-muted text-center font-data">
-          No account?{" "}
-          <Link href="/register" className="text-accent hover:text-accent-hover transition-colors font-medium">
-            Create one
-          </Link>
-        </p>
+    <AuthShell>
+      <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-muted)] mb-4">
+        Sign in
       </div>
-    </div>
+      <h1 className="text-[32px] leading-[1.1] font-semibold tracking-[-0.01em] text-[var(--color-ink)] mb-2">
+        Welcome back.
+      </h1>
+      <p className="text-[14px] text-[var(--color-ink-muted)] mb-8">
+        Pick up where you left off.
+      </p>
+
+      {oauthError === 'OAuthAccountNotLinked' && (
+        <div className="mb-5 px-3 py-2.5 border border-[var(--color-line)] bg-[var(--color-canvas)] text-[11px] text-[var(--color-sink)] rounded-md">
+          This provider account is attached to a different app account. Use the same provider you originally used.
+        </div>
+      )}
+
+      <form onSubmit={onCredentials} className="space-y-5">
+        <div>
+          <label
+            htmlFor="email"
+            className="block font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-ink-muted)] mb-1.5"
+          >
+            Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            required
+            placeholder="you@example.com"
+            className="w-full h-11 px-3.5 border border-[var(--color-line)] rounded-md text-[14px] text-[var(--color-ink)] bg-[var(--color-surface)] placeholder:text-[var(--color-ink-muted)] transition-[border-color] duration-[180ms] focus:outline-none focus:border-[var(--color-ink)] focus-ring"
+          />
+        </div>
+        <div>
+          <label
+            htmlFor="password"
+            className="block font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-ink-muted)] mb-1.5"
+          >
+            Password
+          </label>
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            required
+            placeholder="Your password"
+            className="w-full h-11 px-3.5 border border-[var(--color-line)] rounded-md text-[14px] text-[var(--color-ink)] bg-[var(--color-surface)] placeholder:text-[var(--color-ink-muted)] transition-[border-color] duration-[180ms] focus:outline-none focus:border-[var(--color-ink)] focus-ring"
+          />
+        </div>
+        {err && <div className="text-[11px] text-[var(--color-sink)]">{err}</div>}
+        <button
+          type="submit"
+          disabled={busy}
+          className="w-full h-12 bg-[var(--color-ink)] text-[var(--color-canvas)] rounded-md text-[14px] font-medium hover:bg-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {busy ? 'Signing in…' : 'Sign in'}
+        </button>
+      </form>
+
+      <div className="my-6 flex items-center gap-3">
+        <div className="flex-1 h-px bg-[var(--color-line)]" />
+        <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-muted)]">
+          Or continue with
+        </span>
+        <div className="flex-1 h-px bg-[var(--color-line)]" />
+      </div>
+
+      <div className="space-y-3">
+        <button
+          type="button"
+          onClick={() => signIn('google', { callbackUrl })}
+          className="w-full h-12 flex items-center justify-center gap-2.5 border border-[var(--color-line)] rounded-md text-[13px] text-[var(--color-ink)] bg-[var(--color-surface)] hover:bg-[var(--color-canvas)] transition-colors"
+        >
+          <GoogleIcon />
+          Continue with Google
+        </button>
+        <button
+          type="button"
+          onClick={() => signIn('github', { callbackUrl, prompt: 'login' })}
+          className="w-full h-12 flex items-center justify-center gap-2.5 border border-[var(--color-line)] rounded-md text-[13px] text-[var(--color-ink)] bg-[var(--color-surface)] hover:bg-[var(--color-canvas)] transition-colors"
+        >
+          <GitHubIcon />
+          Continue with GitHub
+        </button>
+      </div>
+
+      <div className="mt-8 text-center text-[12px] text-[var(--color-ink-muted)]">
+        No account?{' '}
+        <Link href="/register" className="underline hover:text-[var(--color-ink)]">
+          Create one →
+        </Link>
+      </div>
+    </AuthShell>
   );
 }
 
 export default function LoginClientPage() {
   return (
-    <Suspense fallback={<div className="auth-container"><div className="text-text-muted text-sm animate-pulse font-data">Loading...</div></div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-[var(--color-canvas)]">
+          <div className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-ink-muted)]">
+            Loading…
+          </div>
+        </div>
+      }
+    >
       <LoginContent />
     </Suspense>
   );
