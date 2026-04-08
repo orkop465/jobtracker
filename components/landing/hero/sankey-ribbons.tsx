@@ -23,13 +23,11 @@ export function SankeyRibbons() {
           <stop offset="0" stopColor="var(--color-ink)" stopOpacity="0.09" />
           <stop offset="1" stopColor="var(--color-ink)" stopOpacity="0.04" />
         </linearGradient>
-        <linearGradient id="ribbon-survive" x1="0" x2="1">
-          <stop offset="0" stopColor="var(--color-survive)" stopOpacity="0.18" />
-          <stop offset="1" stopColor="var(--color-survive)" stopOpacity="0.06" />
-        </linearGradient>
       </defs>
 
-      {/* main breathing ribbon — background mass */}
+      {/* Main breathing ribbon — background mass. Single ink gradient; the
+          previous "survive" overlay was removed because at 26px stroke across
+          900 horizontal units it read as a green bar rather than a ribbon. */}
       <path
         d="M 100 150 C 300 150 500 150 700 150 S 900 150 990 150"
         stroke="url(#ribbon-main)"
@@ -40,19 +38,6 @@ export function SankeyRibbons() {
           ['--breathe-max' as string]: '78px',
           animation: 'ribbon-breathe 8s ease-in-out infinite',
           strokeWidth: '72px',
-        }}
-      />
-      {/* survive ribbon — thin green overlay */}
-      <path
-        d="M 100 150 C 300 148 500 148 700 148 S 900 148 990 148"
-        stroke="url(#ribbon-survive)"
-        strokeLinecap="round"
-        fill="none"
-        style={{
-          ['--breathe-min' as string]: '24px',
-          ['--breathe-max' as string]: '28px',
-          animation: 'ribbon-breathe 8s ease-in-out infinite',
-          strokeWidth: '26px',
         }}
       />
 
