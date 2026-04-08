@@ -8,7 +8,7 @@ export const HERO_STAGES = ['applied', 'screen', 'interview', 'final', 'offer'] 
 export type HeroStage = (typeof HERO_STAGES)[number];
 
 /** Additional column identifier used only for dropped-off cards. */
-export const DROPOFF: 'dropoff' = 'dropoff';
+export const DROPOFF = 'dropoff' as const;
 export type ColumnId = HeroStage | typeof DROPOFF;
 
 /** Human-readable column labels (uppercase-cased at render time). */

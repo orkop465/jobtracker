@@ -29,7 +29,9 @@ export function useInView<T extends HTMLElement = HTMLDivElement>(
     const node = ref.current;
     if (!node) return;
     if (typeof IntersectionObserver === 'undefined') {
-      setInView(true); // SSR-safe fallback: assume visible
+      // SSR-safe fallback: assume visible. Single-shot setState is intentional.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setInView(true);
       return;
     }
 

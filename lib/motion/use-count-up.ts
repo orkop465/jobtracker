@@ -32,12 +32,15 @@ export function useCountUp(target: number, { start, duration = 1200 }: UseCountU
     if (!start) return;
 
     if (typeof window === 'undefined') {
+      // SSR fallback: snap to target. Single-shot setState is fine here.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setValue(target);
       return;
     }
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduced) {
+      // Reduced-motion: snap to target without animating.
       setValue(target);
       return;
     }
