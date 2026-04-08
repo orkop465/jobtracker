@@ -113,7 +113,14 @@ Top-to-bottom layout. Each section's specific motion respects the principles abo
 
 ### 5.2 Hero (the kanban + Sankey fusion)
 
-The visual centerpiece. Full width up to `1240px`. Desktop `min-height: 88vh`, mobile auto height.
+> **Amended** after the first round of visual feedback. Key changes: the
+> drop-off tray was replaced with a 6th "Closed" column; new cards
+> materialize inside the Applied column instead of sliding in from
+> off-screen; each column arrival / departure fires a floating +1 / −1
+> sprite; the green "survive" ribbon overlay was removed (it read as a
+> solid bar rather than a ribbon at 26px × 900px).
+
+The visual centerpiece. Full width up to `1240px`. Desktop `min-height: 88vh`, mobile: inner kanban is `min-width: 780px` inside an `overflow-x-auto` container so it scrolls horizontally rather than cramming.
 
 **Layout (desktop):**
 
@@ -125,18 +132,17 @@ The visual centerpiece. Full width up to `1240px`. Desktop `min-height: 88vh`, m
 
 [ TOTAL · RESPONSE · ACTIVE · VELOCITY · OFFERS ]   ← metric strip
 
-┌───────────────────────────────────────────────────────────┐
-│  Applied   Screen   Interview   Final   Offer             │
-│  ┌───┐    ┌───┐    ┌───┐       ┌───┐   ┌───┐              │
-│  │ A │    │ E │    │ J │       │ M │   │ O │              │
-│  │ B │    │ F │    │ K │       │ N │   │ P │              │
-│  │ C │←──→│ G │    │ L │←──→...│   │   │   │              │
-│  │ D │    │ H │    │   │       │   │   │   │              │
-│  └───┘    └───┘    └───┘       └───┘   └───┘              │
-│  ━━━━━━━━━━━━━━━━ Sankey ribbons ━━━━━━━━━━━━━━━━━━━━━    │
-│                                                            │
-│  ┄┄ Drop-off ┄┄ [Coinbase] [Datadog] [Ramp] ...           │
-└───────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│ Applied   Screen   Interview   Final   Offer   Closed              │
+│  ┌───┐    ┌───┐    ┌───┐       ┌───┐   ┌───┐   ┌───┐               │
+│  │ A │    │ E │    │ J │       │ M │   │ O │   │ -X̶- │ ← dimmed,  │
+│  │ B │    │ F │    │ K │       │ N │   │ P │   │ -Ȳ- │   line-    │
+│  │ C │←──→│ G │    │ L │←──→...│   │   │   │   │ -Z̄- │   through  │
+│  │ D │    │ H │    │   │       │   │   │   │   │     │            │
+│  └───┘    └───┘    └───┘       └───┘   └───┘   └───┘               │
+│  ━━━━━━━ single ink breathing ribbon spans the 5 active ━━━━        │
+│   (no green overlay; Closed column sits outside the ribbon layer)  │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
 **Content:**
@@ -151,30 +157,36 @@ The visual centerpiece. Full width up to `1240px`. Desktop `min-height: 88vh`, m
   - `ACTIVE PIPELINE: 62 +3`
   - `MEDIAN VELOCITY: 14d`
   - `OFFERS: 4 +1` (survive color)
-- 5 stage columns: `Applied · Screen · Interview · Final · Offer` (the 10-stage schema collapsed to 5 for the hero — full 10 still tracked in the authed app)
+- 6 stage columns: `Applied · Screen · Interview · Final · Offer · Closed`. The five active stages are the 10-stage schema collapsed for the hero; the Closed column is the terminal bucket for retired applications (rejected / withdrawn / ghosted, rendered as a single "closed" state in the hero).
 - Each column header: stage name (mono, uppercase) + live count (mono, larger)
-- Drop-off tray below columns: dashed border, mono `DROP-OFF` label, recycling chips of rejected companies (strike-through styled), total count on the right
+- On every column event, a floating **+1 / −1 sprite** rises above the header for 900ms (green for arrivals, sink-color for departures), keyed by timestamp so each event re-triggers the `float-up` keyframe.
+- Closed column is visually distinct: dashed border, muted text, cards rendered with `opacity-50` + `line-through` on the company name. Flights still land there via the existing `applied-dropoff` / `screen-dropoff` / `interview-dropoff` / `final-dropoff` SVG paths.
 
 **Demo data (real company names, public, generic):** Linear · Stripe · Figma · Vercel · Notion · Raycast · Supabase · Retool · Resend · Sanity · Cal.com · Clerk · Neon · Browser Co · Arc · Anthropic · OpenAI · Coinbase · Ramp · Mercury · Datadog · GitHub · Plausible · PostHog · Sentry · Replicate · Modal · Replit · Liveblocks · Ably. Demo data only — no claim of who applied where.
 
-**Mobile hero (vertical rail):**
+**Mobile hero:**
 
-The kanban rotates 90° into a top-down stations list. 5 stations stacked vertically with a single line connecting them:
-- Each station: stage name (left, ink) + count (right, mono ink-muted)
-- A green dot terminates the line at "Offer"
-- Above: same headline + sub + metric strip (3 cells instead of 5: Resp / Active / Velocity)
-- Drop-off tray is omitted on mobile
+> Amendment: the 90° vertical-rail design was dropped in the first revision. The hero now renders the same 6-column kanban on all viewports, wrapped in `overflow-x-auto` with an inner `min-width: 780px`. On mobile, users scroll the hero horizontally to see all six columns. This preserves the identity of the centerpiece and avoids a second layout to maintain.
+
+The `+1` / `−1` sprites, the fade-up entrance for new cards, and the breathing ribbon are shared across desktop and mobile. The Closed column is visible on both.
 
 ### 5.3 Anatomy section · "Ten stages between 'applied' and 'hired'"
+
+> **Amended** after the first round of visual feedback. Percentages were
+> unclear and not mathematically self-consistent; they are now labelled
+> "advance rate" and calibrated so the product across active stages
+> matches the hero's `4 offers / 342 applications = 1.17%` ratio.
 
 - `py-32`, canvas background
 - Eyebrow: `● STAGE BY STAGE` (mono, ink-muted)
 - h2: `"Ten stages between 'applied' and 'hired'. You've been tracking three."` (44px Inter 600)
+- Supporting paragraph: a short explainer naming what the percentages mean — "Each percentage is the median advance rate — the share of applications at that stage that made it to the next one. Multiplied across every active stage it compounds to roughly 1.2% — the actual yield of most job searches."
 - Below: horizontal strip of 10 stage cards, one per stage in the schema
-  - Stages: Applied · Recruiter Screen · OA · Interview R1 · Interview R2 · Interview R3 · Offer · Rejected · Withdrawn · Ghosted
-  - Last 3 (Rejected/Withdrawn/Ghosted) at 60% opacity, no conversion number (terminal)
-  - Each card: stage name (mono uppercase) + glyph SVG + median conversion rate (large mono number, %) + median days-in-stage (small mono)
-- Layout: `grid-cols-10` desktop. Mobile: horizontal scroll with `scroll-snap-type: x mandatory`.
+  - Stages split into 3 variants:
+    - **advance** (6 cards): Applied 25% · Recruiter Screen 60% · OA 55% · Interview R1 55% · Interview R2 58% · Interview R3 45%. Each shows the big percentage, a mono "advance rate" eyebrow underneath, and "~Nd typical" days below.
+    - **end** (1 card): Offer — survive-tinted background, green ✓ instead of a percentage, "end of pipeline" eyebrow, "~2d to decide" days.
+    - **closed** (3 cards): Rejected · Withdrawn · Ghosted — dashed border, 60% opacity, no percentage, "closed" eyebrow (vocabulary parity with the hero's Closed column).
+- Layout: `grid-cols-2 sm:grid-cols-5 lg:grid-cols-10` — 2 cards per row on narrow mobile, 5 at tablet, 10 across on desktop. Same eight-per-row horizontal scroll fallback on xs.
 
 **Motion:**
 
@@ -209,20 +221,29 @@ The kanban rotates 90° into a top-down stations list. 5 stations stacked vertic
 
 ### 5.5 How it actually works · the dark interrupt
 
+> **Amended** after the first round of visual feedback. The giant number no
+> longer translate-x animates on scroll-in (it was reading as a layout
+> stutter), and the visual moved from the bottom-right corner of the slide
+> to sit next to the headline in a proper 2-column grid.
+
 The page's only dark section. **4 full-viewport scroll-driven slides on a sustained `ink` background.**
 
 - Background `ink` (#0A0A0A), text `canvas` (#FAFAF7)
-- Each slide is `min-height: 80vh` (intentionally not full viewport — a 4×100vh dark section is too much total vertical space for an interrupt; 80vh still feels like a "slide" but leaves breathing room above and below the headline on most screens)
+- Each slide is `min-height: 80vh`
 - Eyebrow once, at the top of slide 01 only: `● HOW IT ACTUALLY WORKS`
-- Each slide layout:
+- Each slide layout (desktop):
   ```
-  [ 01 ]                              ← giant mono number, 14% viewport width, top-left, ink-muted color
-                                        [tiny visual]   ← far right, small, restrained
+  [ 01 ]  ← giant mono number, top-left, static watermark (no animation)
 
-       Drop in an application.        ← centered, 96px Inter 600, canvas color, tracking -0.03em
-       Any source — LinkedIn,         ← below, 18px ink-muted body
-       a referral, a cold email.
+    +-------------------------------+----------------------+
+    |  Drop in an application.      |                      |
+    |  Any source — LinkedIn,       |     [tiny visual]    |
+    |  a referral, a cold email.    |                      |
+    +-------------------------------+----------------------+
+     ^ left column: 1fr              ^ right column: 360px
   ```
+  - Outer container: `max-w-[1160px]` centered, `grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-10 lg:gap-16 items-center`
+  - Mobile stacks the grid: headline + sub first, visual below.
 
 **Slide content:**
 
@@ -235,9 +256,11 @@ The page's only dark section. **4 full-viewport scroll-driven slides on a sustai
 
 **Motion:**
 
-- Each slide reveals when it enters the viewport: number slides in from left (translate-x `-24px → 0`, opacity `0 → 1`, `480ms` ease-out-quart), headline fades + translate-y `12px → 0` (`640ms`, delayed `120ms`), sub fades (`280ms`, delayed `360ms`), visual fades last (`280ms`, delayed `480ms`)
-- When the viewer scrolls past a slide, the previous slide dims to `opacity: 0.35` so there's a sense of continuity
-- **Mobile:** same 4 slides, smaller type (`56px` headlines), same scroll behavior
+- Giant number: **static**, opacity `0.35`, no translate animation. Acts as a decorative watermark anchored to the top-left regardless of scroll position.
+- Headline: opacity `0 → 1` + small translate-y `8px → 0` over `640ms` ease-out-quart when the slide enters the viewport.
+- Sub copy: opacity `0 → 1` over `280ms`, delayed `240ms` after the headline.
+- Visual: opacity `0 → 1` over `480ms`, delayed `320ms`. No translate (it's sitting in a grid cell; animating position would reintroduce the same layout-drift problem the number used to have).
+- **Mobile:** same timings, headline scales down to the lower end of `clamp(40px, 6vw, 80px)`.
 
 **Section ends with the canvas returning to light at slide 04's bottom edge.** No animated transition between dark and light — a hard cut, intentional.
 
@@ -290,12 +313,13 @@ The hero runs as a **continuous steady-state simulation**, not a repeating anima
 
 1. **Card pool.** 30 company+role templates predefined in `lib/landing/company-templates.ts`. At any given time ~16 are visible across the 5 columns + drop-off tray. The other 14 are pending entry.
 2. **Transition schedule.** A deterministic, stochastic-feeling schedule drives transitions. Every `2–4s` (jittered within bounds, but the jitter is part of the static schedule — no runtime randomness) one transition fires. The schedule is **90 seconds long**. At t=90 the system state is structurally identical to t=0 (same column populations, same counts) but no individual card is in the same position — the identities have rotated through the pool. The schedule then repeats. Because no individual card is where it was 90 seconds ago, the viewer can't see a "rewind."
-3. **Inflow/outflow balance over the 90s cycle:**
-   - ~12 cards enter at Applied (fade in at the bottom of the column)
-   - ~8 cards exit to Drop-off
-   - ~4 cards progress Applied → Screen → Interview → Final → Offer
-   - Aggregate column sizes drift within ±1 of their average and return to baseline at t=90
-4. **Count tickers.** The 5 displayed stage counts (`280 / 87 / 34 / 9 / 4`) tick when transitions fire — `+1` survive-green flash on arrival, `−1` ink-muted flash on departure — using tabular monospace so there's zero layout shift. Over the 90s cycle each count drifts within ±2 of its baseline and lands back on baseline at t=90. The headline `342` aggregate doesn't change (it's the cumulative all-time number, not the current pipeline).
+3. **Inflow/outflow balance over the 90s cycle** (shipped version):
+   - 10 cards enter at Applied. They materialize **inside** the column via a `.card-enter` fade-up animation (`fade-up 480ms ease-out-quart both`). They do NOT fly in from off-screen — the previous design did, and it read as "weird" in user feedback because the entry motion didn't match the inter-column transit motion.
+   - 9 cards move from active stages to the Closed column via existing SVG drop paths (`applied-dropoff` / `screen-dropoff` / `interview-dropoff` / `final-dropoff`). There, they're appended to a ring-buffer list of up to 6 visible cards in the Closed column, with dimmed styling and line-through company names.
+   - 6 cards progress Applied → Screen → Interview, 4 continue to Final, 2 reach Offer (per the schedule's authored counts).
+   - 1 bookkeeping transition at the seam drains the offer count back to baseline via a hidden `offer → inflow` entry.
+   - Aggregate counts for the five active stages return exactly to baseline at t=90.
+4. **Count tickers.** The 6 displayed stage counts tick when transitions fire. In addition to the existing color flash on the count text itself, a floating **`+1` / `−1` sprite** rises above the column header for 900ms (`float-up` keyframe, survive color for arrivals, sink color for departures) so the user can see the event even if they're not tracking the exact number. The sprite is keyed by timestamp so each event re-mounts it and retriggers the animation.
 
 ### 6.3 Per-transition animation
 
@@ -326,15 +350,18 @@ Total: ~9 named paths. Each is a static `<path>` rendered hidden inside the hero
 
 ### 6.4 Ribbon breathing
 
-Independent of card transitions. Background Sankey ribbons dilate stroke-width on an `8s` sine cycle:
+Independent of card transitions. The single background ink ribbon dilates stroke-width on an `8s` sine cycle:
 - Main flow: `72 → 78 → 72` px
-- Survive ribbon: `26 → 28 → 26` px
 
 A sine wave is inherently periodic, so there's no seam. Opacity stays fixed.
 
-### 6.5 Drop-off pour
+> **Amendment.** The spec originally also specified a secondary "survive" green ribbon overlay at stroke-width `26 → 28 → 26`. It was removed in the first visual revision because at 26px stroke across ~900 horizontal units it rendered as a flat green bar through the middle of the board rather than a ribbon. Only the ink gradient ribbon remains.
 
-When a card's transition target is Drop-off, the curved path bends downward. On arrival, the card shrinks to a strike-through chip format and fades into the tray. The tray recycles: oldest chip fades out from the left as new ones arrive on the right, so the tray's visual length stays stable.
+### 6.5 Closed column (was: Drop-off pour)
+
+When a card's transition target is the Closed column (internal name `dropoff`), it follows one of the existing drop-off SVG paths (`applied-dropoff` etc.) that bend downward and to the right. On arrival, the card is appended to the Closed column's ring buffer and rendered in dimmed, line-through style. The buffer caps at 6 visible cards — oldest falls off the top as new ones arrive.
+
+> **Amendment.** The spec originally specified a horizontal drop-off tray below the 5 active columns with chip-format strike-through cards. In the first visual revision this was replaced with a proper 6th column ("Closed") sitting after Offer, so the dropped cards share the kanban metaphor rather than sitting in a separate visual region. The closed count displays in the column header; the `+1` sprite fires on arrival the same as any other column.
 
 ### 6.6 Initial load choreography (one-time, 0–1500ms)
 

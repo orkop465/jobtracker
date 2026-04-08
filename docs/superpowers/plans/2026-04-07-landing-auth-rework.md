@@ -3824,3 +3824,179 @@ Plan complete and saved to `docs/superpowers/plans/2026-04-07-landing-auth-rewor
 **2. Inline Execution** — Execute tasks in this session using `executing-plans`, batch execution with checkpoints for review.
 
 **Which approach?**
+
+---
+
+## Post-Ship Revision 1 (2026-04-08)
+
+All 36 tasks shipped cleanly as 35 commits on `dev`. First round of visual
+feedback surfaced six issues. This section is the amendment log; it is the
+source of truth for deviations from the original plan. The `docs/superpowers/
+specs/2026-04-07-landing-auth-rework-design.md` and `docs/superpowers/
+STYLE-GUIDE.md` files have been updated to match.
+
+### Amendments to Task 3 (`globals.css`)
+
+Added two new keyframes / helper classes:
+
+- `@keyframes float-up` — 900ms `0 → 6px → -12px → -20px` curve for the new
+  `+1` / `−1` floating sprites in the hero column headers.
+- `.card-enter` class wrapping `fade-up 480ms ease-out-quart both` — applied
+  by `StageColumn` to cards that carry `isNew: true`, so inflow arrivals
+  animate in from +12px translateY + opacity 0 rather than flying in from
+  off-screen.
+
+### Amendments to Task 8 (`lib/landing/constants.ts`) — ANATOMY_STAGES
+
+Original numbers were not mathematically self-consistent and the percentages
+didn't have an explicit label. Rebalanced so the advance rates across the
+six active stages multiply to ~1.18% (≈ 4 offers from 342 applications):
+
+| Stage | Original | Shipped |
+|---|---|---|
+| Applied | 25% | 25% |
+| Recruiter Screen | 71% | 60% |
+| OA | 54% | 55% |
+| Interview R1 | 45% | 55% |
+| Interview R2 | 38% | 58% |
+| Interview R3 | 44% | 45% |
+| Offer | 100% | — (variant: 'end') |
+| Rejected/Withdrawn/Ghosted | terminal | variant: 'closed' |
+
+Also replaced the boolean `terminal` field with a `variant: 'advance' |
+'end' | 'closed'` discriminator. Days-in-stage values unchanged.
+
+### Amendments to Task 10 (`use-pipeline-state.ts`)
+
+Added a third action type:
+
+```ts
+| { type: 'arriveDirectly'; column: HeroStage; now: number }
+```
+
+Handler increments the target column's count and records an "up" flash but
+does NOT add an entry to `state.flying`. Used exclusively for `inflow →
+applied` transitions so new cards materialize inside the column without a
+FlyingCard animation. Covered by a new test in `use-pipeline-state.test.ts`.
+
+### Amendments to Task 12 (`sankey-ribbons.tsx`)
+
+Removed the secondary "survive" ribbon path entirely (the 26px-stroke green
+overlay). At 900 horizontal units it read as a solid green bar through the
+middle of the board rather than a ribbon. Only the ink-gradient main ribbon
+remains.
+
+### Amendments to Task 14 (`stage-column.tsx`)
+
+Signature change:
+
+```ts
+// Before
+interface StageColumnProps {
+  stage: HeroStage;
+  count: number;
+  flash?: 'up' | 'down' | null;
+  cards: { cardId; templateIndex; ghost?; arriving? }[];
+}
+
+// After
+interface StageColumnProps {
+  label: string;                                            // now passed directly
+  count: number;
+  flash?: { kind: 'up' | 'down'; at: number } | null;       // keyed sprite
+  cards: StageColumnCard[];                                  // cards carry isNew
+  variant?: 'default' | 'offer' | 'closed';                  // new variant
+}
+```
+
+- `label` is passed in directly (not looked up from `HERO_STAGE_LABELS`) so
+  the same component can render both hero-stage and "Closed" columns.
+- `flash` now carries a timestamp. The floating sprite is re-mounted on
+  each flash via `key={flash.at}`, re-running the `float-up` animation.
+- Cards flagged `isNew` get the `.card-enter` className so they fade-up on
+  mount. Cards in a `closed` variant column get dimmed + line-through.
+
+### Amendments to Task 16 (`drop-off-tray.tsx`) — REMOVED
+
+The entire `DropOffTray` component was deleted. Retired applications are
+now the hero's 6th column (labelled "Closed") with `variant: 'closed'` on
+`StageColumn`. The component file was removed and its reference deleted
+from the orchestrator.
+
+### Amendments to Task 18 (`pipeline.tsx`) — orchestrator rework
+
+1. **6-column grid.** `grid grid-cols-5` → `grid grid-cols-6`. The outer
+   container is now `overflow-x-auto` with an inner `min-width: 780px` so
+   the six columns stay readable on narrow mobile (horizontal scroll
+   replaces the unimplemented vertical-rail mobile layout from the original
+   plan).
+2. **Inflow path.** The `inflow → applied` branch no longer dispatches
+   `fireTransition` + pushes to `state.flying`. Instead it calls
+   `setSlots` directly with `isNew: true` on the new slot and dispatches
+   the new `arriveDirectly` action for the count increment and flash.
+3. **Closed column state.** Replaced the `dropoffs: number[]` state with
+   `closedSlots: ClosedCardSlot[]` (ring buffer of size 6), `closedCount:
+   number` (starts at 258), and `closedFlash: {kind, at} | null`. On a
+   flight completing at `dropoff` target, the orchestrator pushes to
+   `closedSlots`, bumps `closedCount`, and sets a fresh `closedFlash`.
+4. **Ribbons scope.** The ribbons + flight-path overlay now sit at
+   `inset-0 right-[16.67%]` so they span only the 5 active columns; the
+   Closed column sits outside the ribbon region.
+5. **Pending arrivals type.** `PendingColumn = HeroStage | 'dropoff'` so
+   `pendingArrivalsRef` can distinguish closed arrivals from hero-stage
+   arrivals at completion time.
+
+### Amendments to Task 20 (`anatomy.tsx`)
+
+- Added a short supporting paragraph under the h2 that explains what the
+  percentages represent ("median advance rate — the share of applications
+  at that stage that made it to the next one") and names the compound
+  yield (~1.2%).
+- Per-card rendering now branches on `stage.variant`:
+  - `'advance'`: big percentage + mono `advance rate` eyebrow + `~Nd typical`
+    days.
+  - `'end'` (Offer): survive-tinted background, green `✓` instead of a
+    percentage, `end of pipeline` eyebrow, `~2d to decide`.
+  - `'closed'` (Rejected/Withdrawn/Ghosted): dashed border, opacity 0.6,
+    single `closed` eyebrow (vocabulary parity with the hero's Closed
+    column).
+- Grid: `grid-cols-2 sm:grid-cols-5 lg:grid-cols-10` so mobile shows 2
+  cards per row instead of crushing 10 into a single scroll line.
+
+### Amendments to Task 23 (`how-it-works-slide.tsx`)
+
+- **Giant number is now static.** Removed the `-translate-x-6 →
+  translate-x-0` + opacity transform on the number. It's now a permanent
+  `opacity-[0.35]` watermark in the top-left corner. The previous animation
+  was visible as a horizontal shift when scrolling into each slide and
+  read as layout drift.
+- **Layout restructured** from three absolutely-positioned elements
+  (number top-left, visual bottom-right, headline centered) to:
+  ```
+  <div className="min-h-[80vh] relative ... flex items-center">
+    {/* static number watermark, top-left */}
+    <div className="absolute left-6 sm:left-10 top-6 sm:top-10 ...">{number}</div>
+
+    {/* content grid */}
+    <div className="max-w-[1160px] mx-auto w-full
+                    grid grid-cols-1 lg:grid-cols-[1fr_360px]
+                    gap-10 lg:gap-16 items-center relative z-10">
+      <div>  <h3>{headline}</h3>  <p>{sub}</p>  </div>
+      <div>  {visual}  </div>
+    </div>
+  </div>
+  ```
+- The visual sits next to the headline at the same vertical center on
+  desktop, and stacks below the headline on mobile.
+- Animations: headline fades + 8px translate-y over 640ms; sub fades
+  delayed 240ms; visual fades delayed 320ms. No translate on the visual
+  (it's in a grid cell; any translate would reintroduce layout drift).
+
+### Verification after Rev 1
+
+- `npx tsc --noEmit` — clean
+- `npm test` — 27/27 passing (the new `arriveDirectly` action test is #7
+  in the reducer suite)
+- `npm run build` — clean, no new warnings
+- `grep -rE "bg-surface-0|text-accent|..." in-scope paths` — still clean
+

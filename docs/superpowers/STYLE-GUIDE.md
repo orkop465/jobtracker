@@ -1,6 +1,6 @@
 # MKVDATA Style Guide
 
-> Binding visual system for MKVDATA, derived from the shipped landing page at `/` and the auth pages at `/login` + `/register` as of commit `df29019`. Any new page in the project should consult this document before making visual decisions.
+> Binding visual system for MKVDATA, derived from the shipped landing page at `/` and the auth pages at `/login` + `/register`. Amended after the first round of visual feedback (hero: Closed column + flash sprites + materialize-in-place inflow; anatomy: recalibrated rates; how-it-works: grid layout). Any new page in the project should consult this document before making visual decisions.
 
 This document is the contract for the upcoming authed-app rework. It is intentionally self-contained: a plan-writer should be able to use it without reading the original landing+auth design spec or its implementation plan.
 
@@ -162,8 +162,14 @@ Five principles. Defined as CSS variables in `app/globals.css` and as TypeScript
 |---|---|---|
 | `--dur-micro` | 180ms | Border color, hover state, focus ring |
 | `--dur-standard` | 280ms | Caption crossfade, count flash hold→fade, entrance opacity |
-| `--dur-entrance` | 480ms | Anatomy card stagger, intelligence viz fade-in |
+| `--dur-entrance` | 480ms | Anatomy card stagger, intelligence viz fade-in, hero card `card-enter` (fade-up on mount) |
 | `--dur-hero-reveal` | 640ms | Hero card flight, headline reveal, intelligence feature reveal |
+
+There is also one short-lived sprite animation:
+
+| Keyframe | Duration | Use |
+|---|---|---|
+| `float-up` | 900ms | Floating `+1` / `−1` sprite that appears on the hero stage-column header each time a card arrives or departs. |
 
 ### 5.2 Easing tokens
 
@@ -180,10 +186,12 @@ JS equivalents in `lib/motion/easings.ts`:
 ### 5.3 Five motion principles
 
 1. **Transform + opacity only.** Never animate `width`, `height`, `top`, `left`, `margin`. Use `translate`, `scale`, and `opacity` so animations stay on the compositor. Exception: SVG `stroke-width` is permitted for the hero ribbon-breathe (background ambient layer where layout/paint cost is acceptable).
-2. **Reveal, don't bounce.** Use `--ease-out-quart` for any one-shot reveal. No spring physics, no overshoot.
+2. **Reveal, don't bounce.** Use `--ease-out-quart` for any one-shot reveal. No spring physics, no overshoot. **Do not add horizontal translate animations to static decorative elements** — the user perceives them as layout drift, not as reveal (the how-it-works giant numbers used to translate-x on scroll-in; it read as a stutter, so it was removed).
 3. **Steady-state, not keyframed.** Anything that loops (hero pipeline, ribbon breathe, live-dot, rotating captions) must be authored so the user *can never see the loop reset*. The hero accomplishes this with a 90-second deterministic schedule (`lib/landing/pipeline-schedule.ts`) where every column's count returns to baseline at the seam.
 4. **Reduced motion is a first-class state.** Every motion-using component must check `window.matchMedia('(prefers-reduced-motion: reduce)').matches` and either skip the animation or snap to the final state. The global `@media (prefers-reduced-motion: reduce)` block in `globals.css` collapses CSS transitions to 0.01ms as a safety net.
-5. **One thing at a time per interaction.** Don't animate the count and the card and the ribbon and the flash all on the same frame. The hero pipeline times its flashes 240ms before the card lands so the eye can track each event individually.
+5. **One thing at a time per interaction.** Don't animate the count and the card and the ribbon and the flash all on the same frame. The hero pipeline fires the source column's `−1` flash sprite the moment the card departs, then the destination column's `+1` sprite 640ms later when it lands, so the eye can track the transfer.
+
+**Entrances vs. transits.** New cards entering the Applied column (inflow arrivals) are *not* animated along an SVG path — they materialize inside the column via the `.card-enter` class (`fade-up 480ms ease-out-quart both`). Cards moving between existing columns use the `useFlightPath` rAF loop to follow an SVG curve. The two motions are deliberately distinct: new items pop into existence, in-flight items travel.
 
 ### 5.4 Reusable motion hooks
 
@@ -229,15 +237,16 @@ The hero is the project's most expressive component group. **Do not import these
 
 | Component | Path | Reusable for authed pages? |
 |---|---|---|
-| `HeroPipeline` | `pipeline.tsx` | No — landing only |
+| `HeroPipeline` | `pipeline.tsx` | No — landing only (6-column kanban + flight paths) |
 | `SankeyRibbons` | `sankey-ribbons.tsx` | No |
-| `StageColumn` | `stage-column.tsx` | **Yes** — the kanban-style column with flashing count is reusable. |
-| `CompanyCard` | `company-card.tsx` | **Yes** — generic card primitive (forwardRef, supports ghost/arriving variants). |
+| `StageColumn` | `stage-column.tsx` | **Yes** — kanban-style column with label, flashing count, `+1`/`−1` floating sprite, and `default`/`offer`/`closed` variant styles. |
+| `CompanyCard` | `company-card.tsx` | **Yes** — generic card primitive (forwardRef, supports ghost/arriving variants, accepts a `className` so consumers can add `.card-enter` for entrance animation). |
 | `FlyingCard` | `flying-card.tsx` | No |
 | `MetricStrip` | `metric-strip.tsx` | **Yes** — top-of-page metric row. Generalizes for any dashboard. |
-| `DropOffTray` | `drop-off-tray.tsx` | **Yes** — chip-list "recently lost" tray. |
 | `useFlightPath` | `use-flight-path.ts` | No |
 | `usePipelineState` | `use-pipeline-state.ts` | No (hero-specific state shape) |
+
+The hero's `DropOffTray` primitive was **removed**. The visual of closed/retired applications is now the hero's 6th column (labelled "Closed", variant: `'closed'` on `<StageColumn>`), sitting after Offer with dimmed cards and line-through company names. When reusing `<StageColumn>` in an authed context, the same pattern applies — treat retired items as a dimmed column rather than a separate tray.
 
 ### 6.3 Auth primitives (`components/auth/`)
 
@@ -257,20 +266,26 @@ These are the rules for rendering numbers, labels, and counts in the system. App
 
 - Always `font-mono` + `tabular-nums`.
 - Color: `--color-ink` for steady-state, `--color-survive` when flashing positive, `--color-ink-muted` when flashing negative.
-- Flash is a **color transition** (240ms hold → 280ms back to ink). Never animate position or scale.
-- Pattern from `components/landing/hero/stage-column.tsx`:
+- Flash is a **color transition** (240ms hold → 280ms back to ink). Never animate position or scale on the count itself.
+- A separate **floating `+1` / `−1` sprite** appears above the count on each event. The sprite is keyed on the flash timestamp so React re-mounts it on every flash, re-running the `float-up` 900ms keyframe:
 
 ```tsx
-<span
-  className={[
-    'font-mono text-[13px] tabular-nums transition-colors duration-[240ms]',
-    flash === 'up' && 'text-[var(--color-survive)]',
-    flash === 'down' && 'text-[var(--color-ink-muted)]',
-  ].filter(Boolean).join(' ')}
->
-  {count}
-</span>
+{flash && (
+  <span
+    key={flash.at}
+    aria-hidden
+    className="absolute right-0 -top-3 font-mono text-[10px] font-semibold pointer-events-none tabular-nums"
+    style={{
+      color: flash.kind === 'up' ? 'var(--color-survive)' : 'var(--color-sink)',
+      animation: 'float-up 900ms cubic-bezier(0.22, 1, 0.36, 1) both',
+    }}
+  >
+    {flash.kind === 'up' ? '+1' : '−1'}
+  </span>
+)}
 ```
+
+The `StageColumn` prop shape is `flash?: { kind: 'up' | 'down'; at: number } | null` — always pass the timestamp, not just the kind, so the sprite animation retriggers.
 
 ### 7.2 Labels and eyebrows
 
