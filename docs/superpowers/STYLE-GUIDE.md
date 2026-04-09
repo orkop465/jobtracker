@@ -165,11 +165,12 @@ Five principles. Defined as CSS variables in `app/globals.css` and as TypeScript
 | `--dur-entrance` | 480ms | Anatomy card stagger, intelligence viz fade-in, hero card `card-enter` (fade-up on mount) |
 | `--dur-hero-reveal` | 640ms | Hero card flight, headline reveal, intelligence feature reveal |
 
-There is also one short-lived sprite animation:
+There are also two short-lived sprite / trail animations:
 
 | Keyframe | Duration | Use |
 |---|---|---|
-| `float-up` | 900ms | Floating `+1` / `−1` sprite that appears on the hero stage-column header each time a card arrives or departs. |
+| `float-up` | 900ms | Floating `+1` / `−1` sprite that appears on the hero stage-column header each time a card arrives or departs. Travel: 12px rise (reduced from 20px in rev2 to avoid clipping under `overflow-x-auto`). |
+| `FlightTrail` (CSS transition) | 640ms draw + 240ms fade | Green trail drawn behind forward (survive) flights via `stroke-dashoffset` CSS transition. Only spawned for the 4 forward paths, NOT for drop-off paths. See `components/landing/hero/flight-trail.tsx`. |
 
 ### 5.2 Easing tokens
 
@@ -242,6 +243,7 @@ The hero is the project's most expressive component group. **Do not import these
 | `StageColumn` | `stage-column.tsx` | **Yes** — kanban-style column with label, flashing count, `+1`/`−1` floating sprite, and `default`/`offer`/`closed` variant styles. |
 | `CompanyCard` | `company-card.tsx` | **Yes** — generic card primitive (forwardRef, supports ghost/arriving variants, accepts a `className` so consumers can add `.card-enter` for entrance animation). |
 | `FlyingCard` | `flying-card.tsx` | No |
+| `FlightTrail` | `flight-trail.tsx` | No — draws a green survive-colored SVG trail behind forward flights. |
 | `MetricStrip` | `metric-strip.tsx` | **Yes** — top-of-page metric row. Generalizes for any dashboard. |
 | `useFlightPath` | `use-flight-path.ts` | No |
 | `usePipelineState` | `use-pipeline-state.ts` | No (hero-specific state shape) |
@@ -266,15 +268,15 @@ These are the rules for rendering numbers, labels, and counts in the system. App
 
 - Always `font-mono` + `tabular-nums`.
 - Color: `--color-ink` for steady-state, `--color-survive` when flashing positive, `--color-ink-muted` when flashing negative.
-- Flash is a **color transition** (240ms hold → 280ms back to ink). Never animate position or scale on the count itself.
-- A separate **floating `+1` / `−1` sprite** appears above the count on each event. The sprite is keyed on the flash timestamp so React re-mounts it on every flash, re-running the `float-up` 900ms keyframe:
+- Flash is a **color transition** via `transition-colors duration-[280ms]`. The count tint (survive or muted) is driven by a local `flashActive` state inside `StageColumn` that **auto-clears after 400ms** via `setTimeout`. This ensures the count always fades back to its base color (ink for default, survive for offer, muted for closed) — it never stays tinted indefinitely between flash events.
+- A separate **floating `+1` / `−1` sprite** appears above the count on each event. The sprite is keyed on the flash timestamp so React re-mounts it on every flash, re-running the `float-up` 900ms keyframe. Positioned at `top: 0` with 12px travel to avoid clipping under the hero's `overflow-x-auto`:
 
 ```tsx
 {flash && (
   <span
     key={flash.at}
     aria-hidden
-    className="absolute right-0 -top-3 font-mono text-[10px] font-semibold pointer-events-none tabular-nums"
+    className="absolute right-0 top-0 font-mono text-[10px] font-semibold pointer-events-none tabular-nums"
     style={{
       color: flash.kind === 'up' ? 'var(--color-survive)' : 'var(--color-sink)',
       animation: 'float-up 900ms cubic-bezier(0.22, 1, 0.36, 1) both',

@@ -4000,3 +4000,83 @@ from the orchestrator.
 - `npm run build` — clean, no new warnings
 - `grep -rE "bg-surface-0|text-accent|..." in-scope paths` — still clean
 
+---
+
+## Post-Ship Revision 2 (2026-04-09)
+
+Four issues found in the hero during visual QA. All fixed in commit
+`552210e`.
+
+### Rev 2a: Count staying green after flash
+
+**Problem:** The count span got `text-[var(--color-survive)]` via the
+`flash` prop, which only updated when the *next* flash event fired.
+Between events the green tint persisted indefinitely.
+
+**Fix:** Added a local `flashActive` state in `StageColumn` that mirrors
+`flash` but auto-clears after 400ms via `setTimeout`. The span's color
+class is now gated on `flashActive` (not the raw `flash` prop), so
+`transition-colors duration-[280ms]` handles the smooth fade back to the
+column's base color. Works correctly for all three variants (default →
+ink, offer → survive, closed → ink-muted).
+
+### Rev 2b: +1 / −1 sprites clipped at top edge
+
+**Problem:** Sprite positioned at `-top-3` (−12px) with a keyframe
+travel of 20px meant the peak was −32px above the column header. The
+hero container's `overflow-x-auto` (which per CSS spec forces
+`overflow-y: auto` too) clipped the sprite at the padding-box edge.
+
+**Fix:** Reduced `float-up` keyframe travel from 20 → 12px. Repositioned
+sprite anchor from `-top-3` to `top-0`. Bumped hero card `pt` from
+`pt-[18px]` to `pt-6` (24px) to ensure the sprite peak (12px above
+header, which sits at y=24 inside the hero card) stays at y=12 — safely
+inside the 24px padding-box region.
+
+### Rev 2c: Closed-column flight paths still targeting old drop-off tray
+
+**Problem:** The SVG path definitions in `pipeline-schedule.ts` still
+ended at `(240, 280)` / `(440, 280)` etc. — the physical location of the
+old horizontal tray below the 5-column kanban. After switching to a 6th
+Closed column, cards visually flew to the bottom of the page instead of
+into the Closed column.
+
+**Fix:** Full rescale of all path coordinates:
+- SVG overlay changed from `inset-0 right-[16.67%]` (5-column region) to
+  `inset-0` (full hero width).
+- All path x-coordinates rescaled from 5-column (100/300/500/700/900)
+  to 6-column (83/250/417/583/750/917). Closed column center = x=917.
+- Drop-off paths now arc from source column at (x, 165) through y≈235
+  and rise into the Closed column at (917, 160) — a gentle downward
+  sweep before landing, instead of the old straight fall to y=280.
+- Ribbon path also rescaled: M 83 150 ... S 750 150 820 150 (stops
+  before the Closed column).
+
+### Rev 2d: Green flight trail on forward progressions
+
+**Decision:** Implemented. The trail is tasteful because it's constrained:
+only the 4 forward survive paths get a trail (applied→screen,
+screen→interview, interview→final, final→offer). Drop-off flights to
+Closed deliberately do NOT get trails — they're the failure path.
+
+**Implementation:**
+- New `FlightTrail` component (`components/landing/hero/flight-trail.tsx`)
+  renders an SVG `<path>` with `stroke-dasharray` driven by CSS
+  transitions:
+  1. Mount with dashoffset = totalLength (invisible).
+  2. Next frame: transition dashoffset → 0 over 640ms (draws in sync with
+     the card flight).
+  3. After 640ms: transition stroke-opacity → 0 over 240ms.
+- Orchestrator tracks `activeTrails` state keyed by trailId. Each trail
+  is spawned in `fireTransition` for forward paths and auto-removed via
+  `setTimeout` after 920ms (640 + 240 + buffer).
+- Trail SVG is a dedicated overlay at z-20 (above ribbon z-0, below
+  flying cards z-30) with the same `viewBox="0 0 1000 300"` as the
+  ribbon.
+
+### Verification after Rev 2
+
+- `npx tsc --noEmit` — clean (excluding .next/dev/types/ auto-gen cache)
+- `npm test` — 27/27 passing
+- `npm run build` — clean
+
