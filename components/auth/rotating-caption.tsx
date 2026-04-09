@@ -17,7 +17,7 @@ export function RotatingCaption() {
         setIdx((i) => (i + 1) % ROTATING_CAPTIONS.length);
         setFading(false);
       }, 280);
-    }, 8000);
+    }, 4000);
     return () => clearInterval(interval);
   }, []);
 
