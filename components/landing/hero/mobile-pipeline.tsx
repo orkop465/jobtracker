@@ -45,7 +45,11 @@ function buildSegments(counts: Record<HeroStage, number>): Record<HeroStage, Mob
     for (let i = 0; i < n; i++) {
       // Opacity: higher at bottom (older), lower at top (newer)
       const opacity = 0.08 + (1 - i / Math.max(n - 1, 1)) * 0.14;
-      segments.push({ id: `${stage}-${i}`, opacity });
+      segments.push({
+        id: `${stage}-${counts[stage]}-${i}`,
+        opacity,
+        isNew: i === 0,
+      });
     }
     result[stage] = segments;
   }

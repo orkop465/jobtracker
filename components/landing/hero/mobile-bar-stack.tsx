@@ -6,6 +6,7 @@ export interface MobileSegment {
   id: string;
   /** 0-1 opacity value. Higher = lower in the stack (older). */
   opacity: number;
+  isNew?: boolean;
 }
 
 interface MobileBarStackProps {
@@ -41,6 +42,7 @@ export function MobileBarStack({ label, count, flash, segments, isOffer = false 
               backgroundColor: segColor,
               opacity: isOffer ? 0.35 : seg.opacity,
               ['--seg-opacity' as string]: seg.opacity,
+              ...(seg.isNew ? { animation: 'segment-enter 300ms cubic-bezier(0.22, 1, 0.36, 1) both' } : {}),
             }}
           />
         ))}
