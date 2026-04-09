@@ -95,8 +95,8 @@ body {
 @keyframes float-up {
   0%   { opacity: 0; transform: translateY(4px); }
   20%  { opacity: 1; transform: translateY(0); }
-  70%  { opacity: 1; transform: translateY(-6px); }
-  100% { opacity: 0; transform: translateY(-12px); }
+  70%  { opacity: 1; transform: translateY(-9px); }
+  100% { opacity: 0; transform: translateY(-18px); }
 }
 
 /* Entrance animation used by stage-column cards that appear fresh
