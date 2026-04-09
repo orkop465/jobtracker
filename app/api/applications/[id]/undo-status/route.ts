@@ -25,7 +25,18 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
     });
     if (!owns) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+    // Race-safe undo: read the latest non-voided event AND the current
+    // application status inside the transaction, then condition every write
+    // on what we observed. A concurrent status PATCH or another undo will
+    // either lose the conditional updateMany (count 0) or commit cleanly
+    // before we read — both outcomes are correct.
     const result = await prisma.$transaction(async (tx) => {
+      const currentApp = await tx.application.findFirst({
+        where: { id: appId, userId },
+        select: { status: true },
+      });
+      if (!currentApp) return { ok: false as const, error: "Not found" };
+
       const last = await tx.applicationStatusEvent.findFirst({
         where: { applicationId: appId, userId, voidedAt: null },
         orderBy: { createdAt: "desc" },
@@ -33,10 +44,15 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
 
       if (!last) return { ok: false as const, error: "No status changes to undo" };
 
-      await tx.applicationStatusEvent.updateMany({
-        where: { id: last.id, userId },
+      // Conditional void: only succeeds if this exact event is still the
+      // latest non-voided one. A concurrent undo would have already voided it.
+      const voided = await tx.applicationStatusEvent.updateMany({
+        where: { id: last.id, userId, voidedAt: null },
         data: { voidedAt: new Date() },
       });
+      if (voided.count !== 1) {
+        return { ok: false as const, error: "Conflict — please retry" };
+      }
 
       const prev = await tx.applicationStatusEvent.findFirst({
         where: { applicationId: appId, userId, voidedAt: null },
@@ -45,15 +61,24 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
 
       const newStatus = prev ? prev.toStatus : last.fromStatus;
 
-      await tx.application.updateMany({
-        where: { id: appId, userId },
+      // Conditional status reset: the application must still be in the
+      // status that was set by the event we just voided. If it's not, a
+      // concurrent PATCH already changed it and we should not clobber.
+      const restored = await tx.application.updateMany({
+        where: { id: appId, userId, status: last.toStatus },
         data: { status: newStatus },
       });
+      if (restored.count !== 1) {
+        return { ok: false as const, error: "Conflict — please retry" };
+      }
 
       return { ok: true as const, newStatus };
     });
 
-    if (!result.ok) return NextResponse.json(result, { status: 400 });
+    if (!result.ok) {
+      const status = result.error === "Conflict — please retry" ? 409 : 400;
+      return NextResponse.json(result, { status });
+    }
     return NextResponse.json(result);
   } catch (err: any) {
     return NextResponse.json({ error: err?.message ?? String(err) }, { status: 400 });

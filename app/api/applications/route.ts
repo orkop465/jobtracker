@@ -63,13 +63,18 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Cap at 500 most recent applications. The UI exposes search/filter on top
+  // of this list, so 500 covers any realistic personal job-search history.
+  // If a user ever exceeds this, the route should be upgraded to cursor-based
+  // pagination — for now we surface a `truncated` flag so the UI can warn.
+  const LIST_CAP = 500;
   const apps = await prisma.application.findMany({
     where: { userId },
     include: {
       resume: true,
     },
     orderBy: { appliedAt: "desc" },
-    take: 50,
+    take: LIST_CAP,
   });
 
   const items = apps.map((app) => ({
@@ -81,7 +86,10 @@ export async function GET() {
         : null,
   }));
 
-  return NextResponse.json({ items });
+  return NextResponse.json({
+    items,
+    truncated: items.length === LIST_CAP,
+  });
 }
 
 export async function POST(req: Request) {

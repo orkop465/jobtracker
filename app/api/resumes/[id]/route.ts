@@ -44,11 +44,24 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
 
     const { bucket, object } = parseGsPath(resume.gcsPath);
 
-    await storage.bucket(bucket).file(object).delete({ ignoreNotFound: true });
-
+    // Delete the database row FIRST. If GCS deletion fails afterward, the
+    // file is orphaned (a recoverable problem — easy to clean up via a
+    // sweep job) instead of having a Resume row pointing at a file that
+    // no longer exists (which breaks the view-signed-URL flow for the user).
     const del = await prisma.resume.deleteMany({ where: { id: resumeId, userId } });
     if (del.count !== 1) {
       return NextResponse.json({ error: "Resume not found" }, { status: 404 });
+    }
+
+    try {
+      await storage.bucket(bucket).file(object).delete({ ignoreNotFound: true });
+    } catch (gcsErr) {
+      // The DB row is already gone — log the orphan but report success to
+      // the user. A future cleanup job can sweep storage for orphans.
+      console.error(
+        `[resume-delete] GCS object orphaned: gs://${bucket}/${object}`,
+        gcsErr
+      );
     }
 
     return NextResponse.json({ ok: true });

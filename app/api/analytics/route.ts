@@ -22,10 +22,15 @@ export async function GET() {
 
   const now = new Date();
   const twelveWeeksAgo = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000);
+  // Rolling 12-month analytics window. This bounds the work the route does
+  // for power users with thousands of historical applications and keeps
+  // the response size predictable. groupBy counts (status totals) are still
+  // computed across the full lifetime since they're already aggregated in SQL.
+  const twelveMonthsAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
 
   const [applications, events, groupedByStatus, resumes] = await Promise.all([
     prisma.application.findMany({
-      where: { userId },
+      where: { userId, appliedAt: { gte: twelveMonthsAgo } },
       select: {
         id: true,
         status: true,
@@ -35,7 +40,11 @@ export async function GET() {
       },
     }),
     prisma.applicationStatusEvent.findMany({
-      where: { userId, voidedAt: null },
+      where: {
+        userId,
+        voidedAt: null,
+        occurredAt: { gte: twelveMonthsAgo },
+      },
       orderBy: { occurredAt: "asc" },
       select: {
         applicationId: true,

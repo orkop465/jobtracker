@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Storage } from "@google-cloud/storage";
+import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 
@@ -10,6 +11,15 @@ function mustGetEnv(name: string) {
 }
 
 const storage = new Storage();
+
+// PDF files always start with the magic bytes "%PDF-" (0x25 0x50 0x44 0x46 0x2D).
+// We verify this server-side instead of trusting the client-supplied multipart
+// MIME type, which can be forged by a malicious request.
+const PDF_MAGIC = Buffer.from("%PDF-", "ascii");
+function looksLikePdf(bytes: Buffer): boolean {
+  if (bytes.length < PDF_MAGIC.length) return false;
+  return bytes.subarray(0, PDF_MAGIC.length).equals(PDF_MAGIC);
+}
 
 async function getUserIdOrNull() {
   const session = await auth();
@@ -23,7 +33,7 @@ export async function GET() {
   const items = await prisma.resume.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
-    take: 50,
+    take: 500,
   });
 
   return NextResponse.json({ items });
@@ -45,11 +55,11 @@ export async function POST(req: Request) {
     if (!label) {
       return NextResponse.json({ error: "Label is required" }, { status: 400 });
     }
+    if (label.length > 120) {
+      return NextResponse.json({ error: "Label is too long" }, { status: 400 });
+    }
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "PDF file is required" }, { status: 400 });
-    }
-    if (file.type !== "application/pdf") {
-      return NextResponse.json({ error: "Only PDF files are allowed" }, { status: 400 });
     }
     if (file.size > MAX_BYTES) {
       return NextResponse.json({ error: "File too large (max 2MB)" }, { status: 400 });
@@ -57,11 +67,19 @@ export async function POST(req: Request) {
 
     const bytes = Buffer.from(await file.arrayBuffer());
 
+    // Verify the actual file content is a PDF — do NOT trust file.type, which
+    // is the client-supplied multipart MIME and can be forged by anyone.
+    if (!looksLikePdf(bytes)) {
+      return NextResponse.json({ error: "Only PDF files are allowed" }, { status: 400 });
+    }
+
     const safeName = (file.name || "resume.pdf").replace(/[^\w.\-() ]+/g, "_");
     const envPrefix = process.env.NODE_ENV === "production" ? "prod" : "dev";
 
-    // Future-proof naming: include userId so bucket listings are naturally tenant-separated.
-    const objectName = `resumes/${envPrefix}/${userId}/${Date.now()}-${safeName}`;
+    // Cryptographically unique key — eliminates collisions when two requests
+    // upload identically-named files within the same millisecond. Includes
+    // userId so bucket listings are naturally tenant-separated.
+    const objectName = `resumes/${envPrefix}/${userId}/${randomUUID()}-${safeName}`;
     const gcsPath = `gs://${bucketName}/${objectName}`;
 
     const bucket = storage.bucket(bucketName);

@@ -133,24 +133,28 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       data.nextFollowUp = parsed.nextFollowUp ? new Date(parsed.nextFollowUp) : null;
     }
 
-    const current = await prisma.application.findFirst({
-      where: { id, userId },
-      select: { id: true, status: true },
-    });
-    if (!current) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    const statusChanged =
-      typeof parsed.status === "string" && parsed.status !== current.status;
-
+    // Race-safe update: read the current row inside the transaction and
+    // condition the write on the exact status we observed. If two PATCHes
+    // race, only one matches the conditional updateMany — the loser gets
+    // count: 0 and we surface a 409 so the client can refetch and retry.
     const result = await prisma.$transaction(async (tx) => {
-      const updated = await tx.application.updateMany({
+      const current = await tx.application.findFirst({
         where: { id, userId },
+        select: { id: true, status: true },
+      });
+      if (!current) return { ok: false as const, reason: "not_found" };
+
+      const statusChanged =
+        typeof parsed.status === "string" && parsed.status !== current.status;
+
+      // Conditional write — must include the observed status so a concurrent
+      // status change loses deterministically instead of silently overwriting.
+      const updated = await tx.application.updateMany({
+        where: { id, userId, status: current.status },
         data,
       });
 
-      if (updated.count !== 1) return { ok: false as const };
+      if (updated.count !== 1) return { ok: false as const, reason: "conflict" };
 
       if (statusChanged) {
         await tx.applicationStatusEvent.create({
@@ -167,6 +171,12 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     });
 
     if (!result.ok) {
+      if (result.reason === "conflict") {
+        return NextResponse.json(
+          { error: "Application was modified by another request. Please refresh and try again." },
+          { status: 409 }
+        );
+      }
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 

@@ -28,7 +28,9 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     const items = await prisma.applicationStatusEvent.findMany({
       where: { applicationId: appId, userId, voidedAt: null },
       orderBy: { occurredAt: "asc" },
-      take: 50,
+      // 500 events per application is plenty — even an extreme case of one
+      // status change per day for over a year stays under this cap.
+      take: 500,
     });
 
     return NextResponse.json({ items });
