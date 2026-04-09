@@ -8,6 +8,7 @@ import { StageColumn, type StageColumnCard } from './stage-column';
 import { FlyingCard } from './flying-card';
 import { FlightTrail } from './flight-trail';
 import { usePipelineState } from './use-pipeline-state';
+import { MobilePipeline } from './mobile-pipeline';
 import {
   PIPELINE_SCHEDULE,
   CYCLE_DURATION_MS,
@@ -312,22 +313,21 @@ export function HeroPipeline() {
   return (
     <div
       ref={svgContainerRef}
-      className="relative bg-white border border-[var(--color-line)] rounded-[10px] p-4 pt-6 overflow-x-auto"
+      className="relative bg-white border border-[var(--color-line)] rounded-[10px] p-3 sm:p-4 pt-5 sm:pt-6 sm:overflow-x-auto"
     >
-      {/* Inner kanban — fixed min-width so the 6 columns stay readable on
-          mobile (scrolls horizontally). */}
-      <div className="relative min-w-[780px]">
-        {/* Ribbons + hidden path defs — full width so dropoff paths can
-            reach the Closed column on the far right. */}
-        <div className="absolute inset-0 pointer-events-none z-0">
+      {/* Inner kanban — on mobile: 3×2 grid, no scroll, no SVG overlays.
+          On sm+: single-row 6-col layout with flight paths and ribbons. */}
+      <div className="relative sm:min-w-[640px] lg:min-w-[780px]">
+        {/* Ribbons + hidden path defs — desktop only (SVG paths don't map
+            to the 3×2 mobile grid). */}
+        <div className="hidden sm:block absolute inset-0 pointer-events-none z-0">
           <SankeyRibbons />
         </div>
 
-        {/* Trail overlay — particle-based green trails behind forward flights.
-            Same coordinate space as SankeyRibbons (full-width viewBox). */}
+        {/* Trail overlay — desktop only. */}
         <svg
           aria-hidden
-          className="absolute inset-0 w-full h-full pointer-events-none z-20"
+          className="hidden sm:block absolute inset-0 w-full h-full pointer-events-none z-20"
           viewBox="0 0 1000 300"
           preserveAspectRatio="none"
         >
@@ -350,8 +350,8 @@ export function HeroPipeline() {
           })}
         </svg>
 
-        {/* Flying cards overlay — full width to cover the Closed column path. */}
-        <div className="absolute inset-0 pointer-events-none z-30">
+        {/* Flying cards overlay — desktop only. */}
+        <div className="hidden sm:block absolute inset-0 pointer-events-none z-30">
           {state.flying
             .filter((f) => f.pathName !== 'bookkeeping')
             .map((f) => {
@@ -370,8 +370,17 @@ export function HeroPipeline() {
             })}
         </div>
 
-        {/* Columns — 5 active stages + 1 Closed column */}
-        <div className="grid grid-cols-6 gap-2 relative z-10">
+        {/* Mobile: stacked segment funnel. */}
+        <div className="sm:hidden relative z-10">
+          <MobilePipeline
+            state={state}
+            dispatch={dispatch}
+            onFlightComplete={handleComplete}
+          />
+        </div>
+
+        {/* Desktop: 6-col kanban with company cards. */}
+        <div className="hidden sm:grid sm:grid-cols-6 gap-2 relative z-10">
           {HERO_STAGES.map((stage) => (
             <StageColumn
               key={stage}
