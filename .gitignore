@@ -41,8 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 /app/generated/prisma
-.aidesigner/*
-!.aidesigner/.gitkeep
+.aidesigner/
 .agents/
 .claude/
 .superpowers/
