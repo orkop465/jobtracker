@@ -1,6 +1,8 @@
 # Mobile Pipeline — Stacked Segment Funnel Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+> **Quick start (fresh session):** Run `/superpowers:subagent-driven-development` and point it at this plan file: `docs/superpowers/plans/2026-04-09-mobile-pipeline.md`. It will dispatch one subagent per task, review between tasks, and handle commits.
 
 **Goal:** Replace the mobile pipeline's 3x2 grid of company-card columns with a stacked-segment bar chart funnel where segments animate between bars (advance) or drop-and-fade (reject).
 
