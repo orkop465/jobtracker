@@ -13,7 +13,10 @@ steps:
     name: gcr.io/cloud-builders/docker
     args: ["push", "$_IMAGE"]
 
-  - id: Deploy Cloud Run service
+  # Deploy a new revision but DO NOT shift traffic yet. If migrations fail
+  # below, traffic stays on the previous good revision and users see no
+  # downtime / no schema mismatch.
+  - id: Deploy Cloud Run revision (no traffic)
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
@@ -25,6 +28,9 @@ steps:
       - --region
       - $_REGION
       - --allow-unauthenticated
+      - --no-traffic
+      - --tag
+      - rev-$SHORT_SHA
 
   - id: Update migrate job image
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
@@ -50,6 +56,19 @@ steps:
       - --region
       - $_REGION
       - --wait
+
+  # Migrations succeeded — promote the new revision to receive 100% of traffic.
+  - id: Promote new revision to 100% traffic
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update-traffic
+      - $_SERVICE
+      - --region
+      - $_REGION
+      - --to-latest
 
 images:
   - "$_IMAGE"
