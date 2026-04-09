@@ -62,7 +62,7 @@ interface MobilePipelineProps {
   onFlightComplete: (cardId: string) => void;
 }
 
-export function MobilePipeline({ state, dispatch, onFlightComplete }: MobilePipelineProps) {
+export function MobilePipeline({ state, dispatch: _dispatch, onFlightComplete }: MobilePipelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const barRefs = useRef<Partial<Record<HeroStage, HTMLDivElement>>>({});
   const [flyingSegments, setFlyingSegments] = useState<FlyingSegmentState[]>([]);
@@ -92,8 +92,12 @@ export function MobilePipeline({ state, dispatch, onFlightComplete }: MobilePipe
   }, []);
 
   // Watch state.flying for new entries and spawn mobile animations.
+  // Collect new segments first, then batch-set state to avoid cascading renders.
   useEffect(() => {
     if (prefersReducedMotion) return;
+
+    const newFlying: FlyingSegmentState[] = [];
+    const newDrain: DrainSegmentState[] = [];
 
     for (const flight of state.flying) {
       if (processedFlights.current.has(flight.cardId)) continue;
@@ -118,17 +122,13 @@ export function MobilePipeline({ state, dispatch, onFlightComplete }: MobilePipe
       const removedOpacity = sourceSegments[randomIdx]?.opacity ?? 0.12;
 
       if (flight.to === 'dropoff') {
-        // Drain animation
-        setDrainSegments((prev) => [
-          ...prev,
-          {
-            id: flight.cardId,
-            x: sourceRect.x,
-            y: segY,
-            width: sourceRect.width,
-            opacity: removedOpacity,
-          },
-        ]);
+        newDrain.push({
+          id: flight.cardId,
+          x: sourceRect.x,
+          y: segY,
+          width: sourceRect.width,
+          opacity: removedOpacity,
+        });
       } else {
         // Forward flight
         const toStage = flight.to as HeroStage;
@@ -139,19 +139,20 @@ export function MobilePipeline({ state, dispatch, onFlightComplete }: MobilePipe
         const destSegments = segments[toStage];
         const destY = destRect.y + destRect.height - (destSegments.length + 1) * (segHeight + segGap);
 
-        setFlyingSegments((prev) => [
-          ...prev,
-          {
-            id: flight.cardId,
-            fromStage,
-            toStage,
-            fromRect: { x: sourceRect.x, y: segY, width: sourceRect.width },
-            toRect: { x: destRect.x, y: destY, width: destRect.width },
-            isOffer: toStage === 'offer',
-          },
-        ]);
+        newFlying.push({
+          id: flight.cardId,
+          fromStage,
+          toStage,
+          fromRect: { x: sourceRect.x, y: segY, width: sourceRect.width },
+          toRect: { x: destRect.x, y: destY, width: destRect.width },
+          isOffer: toStage === 'offer',
+        });
       }
     }
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- batched response to parent flight state
+    if (newFlying.length) setFlyingSegments((prev) => [...prev, ...newFlying]);
+    if (newDrain.length) setDrainSegments((prev) => [...prev, ...newDrain]);
   }, [state.flying, segments, getBarRect, prefersReducedMotion]);
 
   // Clean up processedFlights when flights complete

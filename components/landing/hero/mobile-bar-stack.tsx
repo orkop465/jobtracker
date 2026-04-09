@@ -23,10 +23,11 @@ export function MobileBarStack({ label, count, flash, segments, isOffer = false 
   const [flashActive, setFlashActive] = useState(false);
   useEffect(() => {
     if (!flash) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous set before timeout cleanup is intentional
     setFlashActive(true);
     const t = setTimeout(() => setFlashActive(false), FLASH_HOLD_MS);
     return () => clearTimeout(t);
-  }, [flash?.at]);
+  }, [flash]);
 
   const segColor = isOffer ? 'var(--color-survive)' : 'var(--color-ink)';
 
