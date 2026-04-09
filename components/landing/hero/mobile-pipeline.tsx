@@ -1,19 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { HERO_STAGES, type HeroStage } from '@/lib/landing/constants';
-import type { PipelineState, PipelineAction } from './use-pipeline-state';
+import { HERO_STAGES, HERO_STAGE_LABELS, type HeroStage } from '@/lib/landing/constants';
+import type { PipelineState } from './use-pipeline-state';
 import { MobileBarStack, type MobileSegment } from './mobile-bar-stack';
 import { MobileFlyingSegment } from './mobile-flying-segment';
 import { MobileDrainSegment } from './mobile-drain-segment';
-
-const LABELS: Record<HeroStage, string> = {
-  applied: 'Applied',
-  screen: 'Screen',
-  interview: 'Interview',
-  final: 'Final',
-  offer: 'Offer',
-};
 
 const MAX_SEGMENTS = 14;
 const FLIGHT_DURATION_MS = 450;
@@ -24,7 +16,6 @@ interface FlyingSegmentState {
   toStage: HeroStage | 'dropoff';
   fromRect: { x: number; y: number; width: number };
   toRect: { x: number; y: number; width: number };
-  isOffer: boolean;
 }
 
 interface DrainSegmentState {
@@ -58,11 +49,10 @@ function buildSegments(counts: Record<HeroStage, number>): Record<HeroStage, Mob
 
 interface MobilePipelineProps {
   state: PipelineState;
-  dispatch: React.ActionDispatch<[action: PipelineAction]>;
   onFlightComplete: (cardId: string) => void;
 }
 
-export function MobilePipeline({ state, dispatch: _dispatch, onFlightComplete }: MobilePipelineProps) {
+export function MobilePipeline({ state, onFlightComplete }: MobilePipelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const barRefs = useRef<Partial<Record<HeroStage, HTMLDivElement>>>({});
   const [flyingSegments, setFlyingSegments] = useState<FlyingSegmentState[]>([]);
@@ -145,7 +135,6 @@ export function MobilePipeline({ state, dispatch: _dispatch, onFlightComplete }:
           toStage,
           fromRect: { x: sourceRect.x, y: segY, width: sourceRect.width },
           toRect: { x: destRect.x, y: destY, width: destRect.width },
-          isOffer: toStage === 'offer',
         });
       }
     }
@@ -180,10 +169,17 @@ export function MobilePipeline({ state, dispatch: _dispatch, onFlightComplete }:
     [onFlightComplete],
   );
 
-  const setBarRef = useCallback(
-    (stage: HeroStage) => (el: HTMLDivElement | null) => {
-      if (el) barRefs.current[stage] = el;
-    },
+  const barRefCallbacks = useMemo(
+    () =>
+      Object.fromEntries(
+        HERO_STAGES.map((stage) => [
+          stage,
+          (el: HTMLDivElement | null) => {
+            if (el) barRefs.current[stage] = el;
+            else delete barRefs.current[stage];
+          },
+        ]),
+      ) as Record<HeroStage, (el: HTMLDivElement | null) => void>,
     [],
   );
 
@@ -195,9 +191,9 @@ export function MobilePipeline({ state, dispatch: _dispatch, onFlightComplete }:
     >
       <div className="flex gap-1.5 items-end px-1">
         {HERO_STAGES.map((stage) => (
-          <div key={stage} ref={setBarRef(stage)} className="flex-1 min-w-0">
+          <div key={stage} ref={barRefCallbacks[stage]} className="flex-1 min-w-0">
             <MobileBarStack
-              label={LABELS[stage]}
+              label={HERO_STAGE_LABELS[stage]}
               count={state.counts[stage]}
               flash={state.lastFlash[stage] ?? null}
               segments={segments[stage]}
@@ -215,7 +211,6 @@ export function MobilePipeline({ state, dispatch: _dispatch, onFlightComplete }:
           from={f.fromRect}
           to={f.toRect}
           durationMs={FLIGHT_DURATION_MS}
-          isOffer={f.isOffer}
           onComplete={handleFlyingComplete}
         />
       ))}

@@ -315,7 +315,7 @@ export function HeroPipeline() {
       ref={svgContainerRef}
       className="relative bg-white border border-[var(--color-line)] rounded-[10px] p-3 sm:p-4 pt-5 sm:pt-6 sm:overflow-x-auto"
     >
-      {/* Inner kanban — on mobile: 3×2 grid, no scroll, no SVG overlays.
+      {/* Inner kanban — on mobile: stacked segment funnel, no SVG overlays.
           On sm+: single-row 6-col layout with flight paths and ribbons. */}
       <div className="relative sm:min-w-[640px] lg:min-w-[780px]">
         {/* Ribbons + hidden path defs — desktop only (SVG paths don't map
@@ -374,7 +374,6 @@ export function HeroPipeline() {
         <div className="sm:hidden relative z-10">
           <MobilePipeline
             state={state}
-            dispatch={dispatch}
             onFlightComplete={handleComplete}
           />
         </div>

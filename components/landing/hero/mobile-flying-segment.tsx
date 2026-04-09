@@ -13,7 +13,6 @@ interface MobileFlyingSegmentProps {
   from: Rect;
   to: Rect;
   durationMs: number;
-  isOffer: boolean;
   onComplete: (id: string) => void;
 }
 
@@ -24,7 +23,6 @@ export function MobileFlyingSegment({
   from,
   to,
   durationMs,
-  isOffer,
   onComplete,
 }: MobileFlyingSegmentProps) {
   const ref = useRef<HTMLDivElement>(null);
@@ -71,7 +69,7 @@ export function MobileFlyingSegment({
       ref={ref}
       className="absolute top-0 left-0 h-[5px] rounded-[1.5px] pointer-events-none z-30"
       style={{
-        backgroundColor: isOffer ? 'var(--color-survive)' : 'var(--color-survive)',
+        backgroundColor: 'var(--color-survive)',
         opacity: 0.45,
         transform: `translate(${from.x}px, ${from.y}px)`,
         width: `${from.width}px`,
