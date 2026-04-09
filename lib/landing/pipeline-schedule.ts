@@ -124,25 +124,41 @@ export function getActiveTransitionsAt(fromMs: number, toMs: number): ScheduledT
 }
 
 /**
- * Static SVG path d-strings for flying cards. Coordinates assume the hero
- * viewBox is 1000 × 300 (matches the scaled hero layout). Column x-positions:
- *   applied:   100
- *   screen:    300
- *   interview: 500
- *   final:     700
- *   offer:     900
- * Card y-midline is at ~150 in all columns. Drop-off tray is at y=280.
- * Inflow enters applied from x=20, y=150.
+ * Static SVG path d-strings for flying cards. Coordinates are in a viewBox
+ * of 1000 × 300 that stretches across the **full** hero width (the SVG
+ * overlay now uses `inset-0` rather than the previous `right-[16.67%]`).
+ *
+ * 6-column layout — column centers in viewBox x:
+ *   applied:    83
+ *   screen:    250
+ *   interview: 417
+ *   final:     583
+ *   offer:     750
+ *   closed:    917
+ *
+ * Card y-midline is at 150 in all columns.
+ *
+ * Forward (survive) paths run horizontally between adjacent column centers.
+ * Drop paths (now targeting the Closed column) start at the source column
+ * top (y=160), arc gently downward through y≈220, and rise into the Closed
+ * column at (917, 160). They are deliberately routed through the lower
+ * portion of the viewBox so they don't visually collide with the forward
+ * ribbon at y=150.
+ *
+ * `inflow-applied` is retained as a placeholder so the schedule's inflow
+ * entries still resolve to a valid path entry, but it is no longer used
+ * for animation: inflow cards materialize inside the Applied column via
+ * the `card-enter` CSS class instead of flying along this path.
  */
 export const PATH_DEFINITIONS: Record<string, string> = {
-  'inflow-applied':     'M 20 150 Q 60 150 100 150',
-  'applied-screen':     'M 100 150 C 180 150 220 150 300 150',
-  'screen-interview':   'M 300 150 C 380 150 420 150 500 150',
-  'interview-final':    'M 500 150 C 580 150 620 150 700 150',
-  'final-offer':        'M 700 150 C 780 150 820 150 900 150',
-  'applied-dropoff':    'M 100 175 C 140 220 180 260 240 280',
-  'screen-dropoff':     'M 300 175 C 340 220 380 260 440 280',
-  'interview-dropoff':  'M 500 175 C 540 220 580 260 640 280',
-  'final-dropoff':      'M 700 175 C 740 220 780 260 840 280',
+  'inflow-applied':     'M 30 150 Q 60 150 83 150',
+  'applied-screen':     'M 83 150 C 150 150 183 150 250 150',
+  'screen-interview':   'M 250 150 C 320 150 350 150 417 150',
+  'interview-final':    'M 417 150 C 490 150 520 150 583 150',
+  'final-offer':        'M 583 150 C 650 150 680 150 750 150',
+  'applied-dropoff':    'M 83 165 C 280 235 650 235 917 160',
+  'screen-dropoff':     'M 250 165 C 400 235 750 235 917 160',
+  'interview-dropoff':  'M 417 165 C 550 235 800 235 917 160',
+  'final-dropoff':      'M 583 165 C 700 235 830 235 917 160',
   'bookkeeping':        'M 0 0 L 0 0',
 };

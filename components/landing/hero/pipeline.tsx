@@ -6,6 +6,7 @@ import { COMPANY_TEMPLATES } from '@/lib/landing/company-templates';
 import { SankeyRibbons } from './sankey-ribbons';
 import { StageColumn, type StageColumnCard } from './stage-column';
 import { FlyingCard } from './flying-card';
+import { FlightTrail } from './flight-trail';
 import { usePipelineState } from './use-pipeline-state';
 import {
   PIPELINE_SCHEDULE,
@@ -17,6 +18,16 @@ const FLIGHT_DURATION_MS = 640;
 const TICK_INTERVAL_MS = 50;
 const CLOSED_BUFFER_SIZE = 6;
 const CLOSED_INITIAL_COUNT = 258;
+const TRAIL_FADE_MS = 240;
+const TRAIL_LIFETIME_MS = FLIGHT_DURATION_MS + TRAIL_FADE_MS + 40;
+
+/** Forward (survive) paths get a green trail behind the flying card. */
+const FORWARD_PATH_NAMES = new Set([
+  'applied-screen',
+  'screen-interview',
+  'interview-final',
+  'final-offer',
+]);
 
 /** Pending arrival target. Internal `'dropoff'` = the visible "Closed" column. */
 type PendingColumn = HeroStage | 'dropoff';
@@ -32,6 +43,12 @@ interface CardSlot {
 interface ClosedCardSlot {
   cardId: string;
   templateIndex: number;
+}
+
+interface ActiveTrail {
+  id: string;
+  d: string;
+  totalLength: number;
 }
 
 /** Initial column population for the 5 active stages. */
@@ -73,6 +90,7 @@ export function HeroPipeline() {
   const [closedSlots, setClosedSlots] = useState<ClosedCardSlot[]>(() => buildInitialClosedSlots());
   const [closedCount, setClosedCount] = useState(CLOSED_INITIAL_COUNT);
   const [closedFlash, setClosedFlash] = useState<{ kind: 'up' | 'down'; at: number } | null>(null);
+  const [activeTrails, setActiveTrails] = useState<ActiveTrail[]>([]);
 
   // Refs to escape stale closures inside the setInterval tick.
   const slotsRef = useRef<CardSlot[]>(slots);
@@ -85,6 +103,7 @@ export function HeroPipeline() {
   const lastTickRef = useRef<number>(mountedAt);
   const cardCounter = useRef(0);
   const pendingArrivalsRef = useRef<Record<string, { templateIndex: number; column: PendingColumn }>>({});
+  const trailIdRef = useRef(0);
 
   // Collect SVG path elements after mount.
   useEffect(() => {
@@ -97,6 +116,25 @@ export function HeroPipeline() {
     });
     pathsMapRef.current = map;
   }, []);
+
+  /**
+   * Spawn a green trail for a forward (survive) flight. The trail draws in
+   * sync with the card's flight, then fades and is removed from state after
+   * TRAIL_LIFETIME_MS.
+   */
+  const spawnTrailFor = (pathName: string) => {
+    if (!FORWARD_PATH_NAMES.has(pathName)) return;
+    const pathEl = pathsMapRef.current[pathName];
+    if (!pathEl) return;
+    const d = pathEl.getAttribute('d');
+    if (!d) return;
+    const totalLength = pathEl.getTotalLength();
+    const id = `trail-${++trailIdRef.current}`;
+    setActiveTrails((prev) => [...prev, { id, d, totalLength }]);
+    setTimeout(() => {
+      setActiveTrails((prev) => prev.filter((t) => t.id !== id));
+    }, TRAIL_LIFETIME_MS);
+  };
 
   // Schedule driver: ticks every 50ms, fires transitions whose atMs has passed.
   useEffect(() => {
@@ -201,6 +239,8 @@ export function HeroPipeline() {
         pathName: t.pathName,
         now,
       });
+      // Spawn a green trail behind this forward flight.
+      spawnTrailFor(t.pathName);
     };
 
     const interval = setInterval(() => {
@@ -275,17 +315,37 @@ export function HeroPipeline() {
   return (
     <div
       ref={svgContainerRef}
-      className="relative bg-white border border-[var(--color-line)] rounded-[10px] p-4 pt-[18px] overflow-x-auto"
+      className="relative bg-white border border-[var(--color-line)] rounded-[10px] p-4 pt-6 overflow-x-auto"
     >
-      {/* Inner kanban — fixed min-width so the 6 columns stay readable on mobile (scrolls horizontally). */}
+      {/* Inner kanban — fixed min-width so the 6 columns stay readable on
+          mobile (scrolls horizontally). */}
       <div className="relative min-w-[780px]">
-        {/* Ribbons + path defs — positioned over the 5 active columns only */}
-        <div className="absolute inset-0 right-[16.67%] pointer-events-none z-0">
+        {/* Ribbons + hidden path defs — full width so dropoff paths can
+            reach the Closed column on the far right. */}
+        <div className="absolute inset-0 pointer-events-none z-0">
           <SankeyRibbons />
         </div>
 
-        {/* Flying cards overlay — spans the 5 active columns */}
-        <div className="absolute inset-0 right-[16.67%] pointer-events-none z-30">
+        {/* Trail overlay — short-lived green trails behind forward flights.
+            Same coordinate space as SankeyRibbons (full-width viewBox). */}
+        <svg
+          aria-hidden
+          className="absolute inset-0 w-full h-full pointer-events-none z-20"
+          viewBox="0 0 1000 300"
+          preserveAspectRatio="none"
+        >
+          {activeTrails.map((trail) => (
+            <FlightTrail
+              key={trail.id}
+              d={trail.d}
+              totalLength={trail.totalLength}
+              durationMs={FLIGHT_DURATION_MS}
+            />
+          ))}
+        </svg>
+
+        {/* Flying cards overlay — full width to cover the Closed column path. */}
+        <div className="absolute inset-0 pointer-events-none z-30">
           {state.flying
             .filter((f) => f.pathName !== 'bookkeeping')
             .map((f) => {

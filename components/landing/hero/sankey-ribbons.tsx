@@ -25,19 +25,22 @@ export function SankeyRibbons() {
         </linearGradient>
       </defs>
 
-      {/* Main breathing ribbon — background mass. Single ink gradient; the
-          previous "survive" overlay was removed because at 26px stroke across
-          900 horizontal units it read as a green bar rather than a ribbon. */}
+      {/* Main breathing ribbon — background mass spanning the 5 active stages
+          (Applied → Offer). Stops short of the Closed column (x=917) so the
+          ribbon visually represents the *active flow*, not the terminal bucket.
+          The previous "survive" overlay was removed because at 26px stroke
+          across 900 horizontal units it read as a green bar rather than a
+          ribbon. */}
       <path
-        d="M 100 150 C 300 150 500 150 700 150 S 900 150 990 150"
+        d="M 83 150 C 250 150 417 150 583 150 S 750 150 820 150"
         stroke="url(#ribbon-main)"
         strokeLinecap="round"
         fill="none"
         style={{
-          ['--breathe-min' as string]: '64px',
-          ['--breathe-max' as string]: '78px',
+          ['--breathe-min' as string]: '60px',
+          ['--breathe-max' as string]: '72px',
           animation: 'ribbon-breathe 8s ease-in-out infinite',
-          strokeWidth: '72px',
+          strokeWidth: '66px',
         }}
       />
 

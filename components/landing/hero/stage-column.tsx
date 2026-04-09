@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { CompanyCard } from './company-card';
 
 export type StageColumnVariant = 'default' | 'offer' | 'closed';
@@ -29,9 +30,23 @@ interface StageColumnProps {
   variant?: StageColumnVariant;
 }
 
+/** How long the count number stays tinted after a flash event. */
+const FLASH_HOLD_MS = 400;
+
 export function StageColumn({ label, count, flash, cards, variant = 'default' }: StageColumnProps) {
   const isOffer = variant === 'offer';
   const isClosed = variant === 'closed';
+
+  // Local "flash is active" mirror that auto-clears after FLASH_HOLD_MS so the
+  // count tint fades back to its base color via the transition-colors property.
+  // Without this, the count would stay tinted indefinitely between flash events.
+  const [flashActive, setFlashActive] = useState(false);
+  useEffect(() => {
+    if (!flash) return;
+    setFlashActive(true);
+    const t = setTimeout(() => setFlashActive(false), FLASH_HOLD_MS);
+    return () => clearTimeout(t);
+  }, [flash?.at]);
 
   return (
     <div className="flex flex-col relative">
@@ -49,12 +64,12 @@ export function StageColumn({ label, count, flash, cards, variant = 'default' }:
         </span>
         <span
           className={[
-            'font-mono text-[13px] tabular-nums transition-colors duration-[240ms]',
-            flash?.kind === 'up' && 'text-[var(--color-survive)]',
-            flash?.kind === 'down' && 'text-[var(--color-ink-muted)]',
-            !flash && isOffer && 'text-[var(--color-survive)]',
-            !flash && isClosed && 'text-[var(--color-ink-muted)]',
-            !flash && !isOffer && !isClosed && 'text-[var(--color-ink)]',
+            'font-mono text-[13px] tabular-nums transition-colors duration-[280ms]',
+            flashActive && flash?.kind === 'up' && 'text-[var(--color-survive)]',
+            flashActive && flash?.kind === 'down' && 'text-[var(--color-ink-muted)]',
+            !flashActive && isOffer && 'text-[var(--color-survive)]',
+            !flashActive && isClosed && 'text-[var(--color-ink-muted)]',
+            !flashActive && !isOffer && !isClosed && 'text-[var(--color-ink)]',
           ]
             .filter(Boolean)
             .join(' ')}
@@ -62,12 +77,14 @@ export function StageColumn({ label, count, flash, cards, variant = 'default' }:
           {count}
         </span>
 
-        {/* Floating +1 / -1 sprite — re-mounts on every new flash via `key` */}
+        {/* Floating +1 / -1 sprite — re-mounts on every new flash via `key`.
+            Anchored at the top-right edge of the count and rises 12px max,
+            staying inside the hero card's padding-box so it never clips. */}
         {flash && (
           <span
             key={flash.at}
             aria-hidden
-            className="absolute right-0 -top-3 font-mono text-[10px] font-semibold pointer-events-none tabular-nums"
+            className="absolute right-0 top-0 font-mono text-[10px] font-semibold pointer-events-none tabular-nums"
             style={{
               color: flash.kind === 'up' ? 'var(--color-survive)' : 'var(--color-sink)',
               animation: 'float-up 900ms cubic-bezier(0.22, 1, 0.36, 1) both',
