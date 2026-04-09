@@ -18,8 +18,9 @@ const FLIGHT_DURATION_MS = 640;
 const TICK_INTERVAL_MS = 50;
 const CLOSED_BUFFER_SIZE = 6;
 const CLOSED_INITIAL_COUNT = 258;
-const TRAIL_FADE_MS = 240;
-const TRAIL_LIFETIME_MS = FLIGHT_DURATION_MS + TRAIL_FADE_MS + 40;
+// Trail fades internally by 100% progress, so we only need a small buffer
+// past flight duration before unmounting the trail from React state.
+const TRAIL_LIFETIME_MS = FLIGHT_DURATION_MS + 80;
 
 /** Forward (survive) paths get a green trail behind the flying card. */
 const FORWARD_PATH_NAMES = new Set([

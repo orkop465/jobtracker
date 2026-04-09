@@ -12,23 +12,23 @@ interface FlightTrailProps {
   startedAt: number;
 }
 
-const NUM_DOTS = 12;
-const TRAIL_PORTION = 0.3; // trail covers the trailing 30% of the drawn path
-const FADE_MS = 280;
-const MAX_RADIUS = 10; // front dot (card-sized feel)
-const MIN_RADIUS = 1.5; // tail dot
+const NUM_DOTS = 14;
+const TRAIL_PORTION = 0.5; // trail covers the trailing 50% of the drawn path
+const MAX_RADIUS = 6;
+const MIN_RADIUS = 1;
 
 /**
  * Particle-based flight trail rendered as SVG circles that follow the card
  * along the path. Uses direct DOM manipulation (no React re-renders) for
  * smooth 60fps updates.
  *
- * Visual: a tapered comet tail — large soft green circles near the card
- * that shrink and fade to transparent toward the tail. The front 20% of
- * dots blend from green to white for a hot-core gradient effect.
+ * The trail sits BEHIND the card (the front dot is offset back from the
+ * card's current position) and tapers from ~6px radius near the card to
+ * ~1px at the tail. A Gaussian blur filter softens the dots into a glow.
  *
- * The trail is rendered inside the parent SVG (same viewBox as the path
- * defs), so coordinates from getPointAtLength are used directly.
+ * The trail begins fading at 85% flight progress so it's nearly gone by
+ * the time the card lands and unmounts — no orphaned trail visible after
+ * the card disappears.
  */
 export function FlightTrail({ pathElement, durationMs, startedAt }: FlightTrailProps) {
   const groupRef = useRef<SVGGElement>(null);
@@ -39,8 +39,10 @@ export function FlightTrail({ pathElement, durationMs, startedAt }: FlightTrailP
 
     const totalLength = pathElement.getTotalLength();
     const trailLength = TRAIL_PORTION * totalLength;
+    // The front dot sits this far BEHIND the card's actual position.
+    const frontOffset = 0.06 * totalLength;
 
-    // Create circle elements once — green base layer + white highlight layer
+    // Create circle elements once — green base + white highlight
     const greens: SVGCircleElement[] = [];
     const whites: SVGCircleElement[] = [];
     const svgNs = 'http://www.w3.org/2000/svg';
@@ -65,33 +67,36 @@ export function FlightTrail({ pathElement, durationMs, startedAt }: FlightTrailP
       const progress = Math.min(rawProgress, 1);
       const eased = easeInOutCubic(progress);
 
-      // Fade multiplier: after the flight ends, fade everything over FADE_MS
-      const fadeMul = rawProgress > 1 ? Math.max(0, 1 - (elapsed - durationMs) / FADE_MS) : 1;
-      if (fadeMul <= 0) return; // fully faded — stop
+      // Begin fading at 85% progress so the trail is nearly gone when the
+      // card lands and unmounts. Fully faded by 100%.
+      const fadeMul = progress > 0.85 ? Math.max(0, 1 - (progress - 0.85) / 0.15) : 1;
+      if (fadeMul <= 0 && rawProgress >= 1) return; // done
 
-      const currentLength = eased * totalLength;
-      const trailStart = Math.max(0, currentLength - trailLength);
+      const cardLength = eased * totalLength;
+      // Front of trail sits behind the card; back of trail is trailLength further back.
+      const frontLength = Math.max(0, cardLength - frontOffset);
+      const backLength = Math.max(0, frontLength - trailLength);
 
       for (let i = 0; i < NUM_DOTS; i++) {
-        // t: 0 = tail, 1 = front (near card)
+        // t: 0 = tail (back), 1 = front (near card)
         const t = i / (NUM_DOTS - 1);
-        const lengthAt = trailStart + t * (currentLength - trailStart);
+        const lengthAt = backLength + t * (frontLength - backLength);
         const pt = pathElement.getPointAtLength(lengthAt);
 
-        // Radius: small at tail → large at front
+        // Radius: tapers from front to tail
         const r = MIN_RADIUS + t * (MAX_RADIUS - MIN_RADIUS);
-        // Green opacity: faint at tail → solid at front
-        const greenOp = t * 0.4 * fadeMul;
+        // Green opacity: 0 at tail → 0.5 at front, modulated by fade
+        const greenOp = t * 0.5 * fadeMul;
 
         greens[i].setAttribute('cx', String(pt.x));
         greens[i].setAttribute('cy', String(pt.y));
         greens[i].setAttribute('r', String(r));
         greens[i].setAttribute('opacity', String(greenOp));
 
-        // White highlight: only the front 25% of dots get a smaller white core
-        const whiteFrac = t > 0.75 ? (t - 0.75) / 0.25 : 0;
-        const whiteOp = whiteFrac * 0.35 * fadeMul;
-        const whiteR = r * 0.5;
+        // White highlight: only the front 30% of dots
+        const whiteFrac = t > 0.7 ? (t - 0.7) / 0.3 : 0;
+        const whiteOp = whiteFrac * 0.3 * fadeMul;
+        const whiteR = r * 0.45;
 
         whites[i].setAttribute('cx', String(pt.x));
         whites[i].setAttribute('cy', String(pt.y));
