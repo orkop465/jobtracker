@@ -1,0 +1,42 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+
+const DRAIN_DURATION_MS = 450;
+
+interface MobileDrainSegmentProps {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  opacity: number;
+  onComplete: (id: string) => void;
+}
+
+export function MobileDrainSegment({ id, x, y, width, opacity, onComplete }: MobileDrainSegmentProps) {
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDone(true);
+      onComplete(id);
+    }, DRAIN_DURATION_MS);
+    return () => clearTimeout(t);
+  }, [id, onComplete]);
+
+  if (done) return null;
+
+  return (
+    <div
+      className="absolute top-0 left-0 h-[5px] rounded-[1.5px] pointer-events-none z-30"
+      style={{
+        backgroundColor: 'var(--color-ink)',
+        ['--seg-opacity' as string]: opacity,
+        opacity,
+        transform: `translate(${x}px, ${y}px)`,
+        width: `${width}px`,
+        animation: `segment-drain ${DRAIN_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1) both`,
+      }}
+    />
+  );
+}
