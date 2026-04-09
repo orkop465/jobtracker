@@ -79,6 +79,7 @@ export default function ApplicationsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const filteredItems = items.filter((item) => {
     const matchesCompany =
@@ -93,52 +94,72 @@ export default function ApplicationsPage() {
   async function load(showSpinner = true) {
     if (showSpinner) setLoading(true);
     setErr(null);
-    const res = await fetch("/api/applications", { cache: "no-store" });
-    const data = await safeJson(res);
-    if (!res.ok) {
+    try {
+      const res = await fetch("/api/applications", { cache: "no-store" });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        setItems([]);
+        setErr(data?.error ?? `Failed to load applications (${res.status})`);
+      } else {
+        setItems(data?.items ?? []);
+      }
+    } catch (e) {
+      console.error("[applications] load failed", e);
       setItems([]);
-      setErr(data?.error ?? `Failed to load applications (${res.status})`);
-    } else {
-      setItems(data?.items ?? []);
+      setErr("Failed to load applications. Check your connection and retry.");
+    } finally {
+      if (showSpinner) setLoading(false);
     }
-    if (showSpinner) setLoading(false);
   }
 
   async function loadResumes() {
-    const res = await fetch("/api/resumes", { cache: "no-store" });
-    const data = await safeJson(res);
-    if (res.ok) {
-      setResumes((data?.items ?? []).map((r: any) => ({ id: r.id, label: r.label })));
+    try {
+      const res = await fetch("/api/resumes", { cache: "no-store" });
+      const data = await safeJson(res);
+      if (res.ok) {
+        setResumes((data?.items ?? []).map((r: any) => ({ id: r.id, label: r.label })));
+      }
+    } catch (e) {
+      console.error("[applications] loadResumes failed", e);
     }
   }
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
+    if (creating) return; // double-submit guard
     setErr(null);
-    const body: Record<string, unknown> = { company, roleTitle, jobUrl, location, resumeId: resumeIdForCreate };
-    if (sourceForCreate) body.source = sourceForCreate;
-    if (priorityForCreate) body.priority = priorityForCreate;
+    setCreating(true);
+    try {
+      const body: Record<string, unknown> = { company, roleTitle, jobUrl, location, resumeId: resumeIdForCreate };
+      if (sourceForCreate) body.source = sourceForCreate;
+      if (priorityForCreate) body.priority = priorityForCreate;
 
-    const res = await fetch("/api/applications", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await safeJson(res);
-    if (!res.ok) {
-      setErr(data?.error ?? `Request failed (${res.status})`);
-      return;
+      const res = await fetch("/api/applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        setErr(data?.error ?? `Request failed (${res.status})`);
+        return;
+      }
+      toast(`Added ${company.trim()}`, "success");
+      setCompany("");
+      setRoleTitle("");
+      setJobUrl("");
+      setLocation("");
+      setResumeIdForCreate("");
+      setSourceForCreate("");
+      setPriorityForCreate("");
+      setShowCreateForm(false);
+      await load(false);
+    } catch (e) {
+      console.error("[applications] create failed", e);
+      setErr("Failed to create application. Please try again.");
+    } finally {
+      setCreating(false);
     }
-    toast(`Added ${company.trim()}`, "success");
-    setCompany("");
-    setRoleTitle("");
-    setJobUrl("");
-    setLocation("");
-    setResumeIdForCreate("");
-    setSourceForCreate("");
-    setPriorityForCreate("");
-    setShowCreateForm(false);
-    await load(false);
   }
 
   async function onStatusChange(id: string, status: string) {
@@ -247,7 +268,9 @@ export default function ApplicationsPage() {
                 placeholder="Priority..."
               />
             </div>
-            <Button type="submit" variant="primary">Add Application</Button>
+            <Button type="submit" variant="primary" loading={creating} disabled={creating}>
+              {creating ? "Adding..." : "Add Application"}
+            </Button>
           </form>
         </Card>
       )}

@@ -75,6 +75,11 @@ export function Modal({ open, onClose, title, children, width = "max-w-lg" }: Mo
 
   if (!open && !closing) return null;
 
+  // Stable id linking the panel's title element to the dialog's
+  // aria-labelledby — required for screen readers to announce the dialog
+  // by name. We only set it when there is a title.
+  const titleId = title ? "modal-title" : undefined;
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       {/* Backdrop */}
@@ -82,11 +87,16 @@ export function Modal({ open, onClose, title, children, width = "max-w-lg" }: Mo
         ref={overlayRef}
         className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-200 ${closing ? "opacity-0" : "opacity-100"}`}
         onClick={handleClose}
+        aria-hidden="true"
       />
 
       {/* Panel */}
       <div
         ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
         className={`
           relative ${width} w-full h-full
           bg-surface-0 border-l border-border
@@ -97,7 +107,7 @@ export function Modal({ open, onClose, title, children, width = "max-w-lg" }: Mo
         {/* Header */}
         {title && (
           <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 bg-surface-0/90 backdrop-blur-md border-b border-border">
-            <h2 className="text-base font-semibold text-text-primary tracking-tight">{title}</h2>
+            <h2 id={titleId} className="text-base font-semibold text-text-primary tracking-tight">{title}</h2>
             <button
               onClick={handleClose}
               className="p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-surface-3 transition-colors focus-ring"

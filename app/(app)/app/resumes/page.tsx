@@ -33,15 +33,22 @@ export default function ResumesPage() {
   async function load(showSpinner = true) {
     if (showSpinner) setLoading(true);
     setErr(null);
-    const res = await fetch("/api/resumes", { cache: "no-store" });
-    const data = await safeJson(res);
-    if (!res.ok) {
+    try {
+      const res = await fetch("/api/resumes", { cache: "no-store" });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        setItems([]);
+        setErr(data?.error ?? `Failed to load resumes (${res.status})`);
+      } else {
+        setItems(data?.items ?? []);
+      }
+    } catch (e) {
+      console.error("[resumes] load failed", e);
       setItems([]);
-      setErr(data?.error ?? `Failed to load resumes (${res.status})`);
-    } else {
-      setItems(data?.items ?? []);
+      setErr("Failed to load resumes. Check your connection and retry.");
+    } finally {
+      if (showSpinner) setLoading(false);
     }
-    if (showSpinner) setLoading(false);
   }
 
   useEffect(() => { load(true); }, []);
@@ -55,6 +62,7 @@ export default function ResumesPage() {
     if (file.type !== "application/pdf") { setErr("Only PDF files are allowed"); return; }
     if (file.size > 2 * 1024 * 1024) { setErr("PDF must be 2MB or smaller"); return; }
 
+    if (busy) return; // double-submit guard
     setBusy(true);
     try {
       const fd = new FormData();
@@ -70,6 +78,9 @@ export default function ResumesPage() {
       const fileInput = document.getElementById("resume-file-input") as HTMLInputElement;
       if (fileInput) fileInput.value = "";
       await load(false);
+    } catch (e) {
+      console.error("[resumes] upload failed", e);
+      setErr("Upload failed. Please try again.");
     } finally {
       setBusy(false);
     }

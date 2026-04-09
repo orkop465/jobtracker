@@ -48,20 +48,32 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [resumes, setResumes] = useState<{ id: string; label: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  function fetchAll() {
+  async function fetchAll() {
     setLoading(true);
-    Promise.all([
-      fetch("/api/dashboard").then((r) => r.json()),
-      fetch("/api/resumes").then((r) => r.json()),
-    ])
-      .then(([dashData, resumeData]) => {
-        setData(dashData);
-        setResumes(
-          (resumeData.items ?? []).map((r: any) => ({ id: r.id, label: r.label }))
-        );
-      })
-      .finally(() => setLoading(false));
+    setLoadError(null);
+    try {
+      const [dashRes, resumeRes] = await Promise.all([
+        fetch("/api/dashboard"),
+        fetch("/api/resumes"),
+      ]);
+      if (!dashRes.ok) throw new Error(`dashboard ${dashRes.status}`);
+      if (!resumeRes.ok) throw new Error(`resumes ${resumeRes.status}`);
+      const [dashData, resumeData] = await Promise.all([
+        dashRes.json(),
+        resumeRes.json(),
+      ]);
+      setData(dashData);
+      setResumes(
+        (resumeData.items ?? []).map((r: any) => ({ id: r.id, label: r.label }))
+      );
+    } catch (err) {
+      console.error("[dashboard] load failed", err);
+      setLoadError("Failed to load dashboard data.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -76,9 +88,19 @@ export default function DashboardPage() {
     );
   }
 
-  if (!data) {
+  if (loadError || !data) {
     return (
-      <div className="text-center text-text-muted py-20 font-data">Failed to load dashboard data.</div>
+      <div className="text-center text-text-muted py-20 font-data">
+        {loadError ?? "Failed to load dashboard data."}
+        <div className="mt-4">
+          <button
+            onClick={() => fetchAll()}
+            className="font-data text-[10px] text-accent uppercase tracking-widest hover:text-accent-hover"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
     );
   }
 
