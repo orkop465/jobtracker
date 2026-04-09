@@ -1,62 +1,110 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
+import { easeInOutCubic } from '@/lib/motion/easings';
 
 interface FlightTrailProps {
-  /** SVG path d-string to draw. */
-  d: string;
-  /** Total length of the path in viewBox units (from getTotalLength()). */
-  totalLength: number;
-  /** How long the draw-in animation runs (matches the flight duration). */
+  /** The SVG path element the card is flying along. */
+  pathElement: SVGPathElement;
+  /** Flight duration in ms (same as the card's). */
   durationMs: number;
+  /** performance.now() timestamp when the flight started. */
+  startedAt: number;
 }
 
+const NUM_DOTS = 12;
+const TRAIL_PORTION = 0.3; // trail covers the trailing 30% of the drawn path
+const FADE_MS = 280;
+const MAX_RADIUS = 10; // front dot (card-sized feel)
+const MIN_RADIUS = 1.5; // tail dot
+
 /**
- * Short-lived green trail that draws behind a flying card on a forward
- * (survive) progression. Lifecycle:
+ * Particle-based flight trail rendered as SVG circles that follow the card
+ * along the path. Uses direct DOM manipulation (no React re-renders) for
+ * smooth 60fps updates.
  *
- *   1. Mount with stroke-dashoffset = totalLength (line invisible).
- *   2. Next frame: animate stroke-dashoffset → 0 over `durationMs` so the
- *      line "draws in" alongside the card's flight.
- *   3. After `durationMs`: fade stroke-opacity → 0 over 240ms.
+ * Visual: a tapered comet tail — large soft green circles near the card
+ * that shrink and fade to transparent toward the tail. The front 20% of
+ * dots blend from green to white for a hot-core gradient effect.
  *
- * The orchestrator removes the trail from its activeTrails state ~280ms
- * after the flight completes, which is when this fade has finished.
+ * The trail is rendered inside the parent SVG (same viewBox as the path
+ * defs), so coordinates from getPointAtLength are used directly.
  */
-export function FlightTrail({ d, totalLength, durationMs }: FlightTrailProps) {
-  const [phase, setPhase] = useState<'idle' | 'drawing' | 'fading'>('idle');
+export function FlightTrail({ pathElement, durationMs, startedAt }: FlightTrailProps) {
+  const groupRef = useRef<SVGGElement>(null);
 
   useEffect(() => {
-    // Kick off the draw on the next frame so the initial idle state is
-    // committed before the transition begins.
-    const rafId = requestAnimationFrame(() => setPhase('drawing'));
-    const fadeTimer = setTimeout(() => setPhase('fading'), durationMs);
-    return () => {
-      cancelAnimationFrame(rafId);
-      clearTimeout(fadeTimer);
+    const g = groupRef.current;
+    if (!g || !pathElement) return;
+
+    const totalLength = pathElement.getTotalLength();
+    const trailLength = TRAIL_PORTION * totalLength;
+
+    // Create circle elements once — green base layer + white highlight layer
+    const greens: SVGCircleElement[] = [];
+    const whites: SVGCircleElement[] = [];
+    const svgNs = 'http://www.w3.org/2000/svg';
+
+    for (let i = 0; i < NUM_DOTS; i++) {
+      const gc = document.createElementNS(svgNs, 'circle');
+      gc.setAttribute('fill', 'var(--color-survive)');
+      g.appendChild(gc);
+      greens.push(gc);
+
+      const wc = document.createElementNS(svgNs, 'circle');
+      wc.setAttribute('fill', 'white');
+      g.appendChild(wc);
+      whites.push(wc);
+    }
+
+    let rafId: number;
+
+    const tick = () => {
+      const elapsed = performance.now() - startedAt;
+      const rawProgress = elapsed / durationMs;
+      const progress = Math.min(rawProgress, 1);
+      const eased = easeInOutCubic(progress);
+
+      // Fade multiplier: after the flight ends, fade everything over FADE_MS
+      const fadeMul = rawProgress > 1 ? Math.max(0, 1 - (elapsed - durationMs) / FADE_MS) : 1;
+      if (fadeMul <= 0) return; // fully faded — stop
+
+      const currentLength = eased * totalLength;
+      const trailStart = Math.max(0, currentLength - trailLength);
+
+      for (let i = 0; i < NUM_DOTS; i++) {
+        // t: 0 = tail, 1 = front (near card)
+        const t = i / (NUM_DOTS - 1);
+        const lengthAt = trailStart + t * (currentLength - trailStart);
+        const pt = pathElement.getPointAtLength(lengthAt);
+
+        // Radius: small at tail → large at front
+        const r = MIN_RADIUS + t * (MAX_RADIUS - MIN_RADIUS);
+        // Green opacity: faint at tail → solid at front
+        const greenOp = t * 0.4 * fadeMul;
+
+        greens[i].setAttribute('cx', String(pt.x));
+        greens[i].setAttribute('cy', String(pt.y));
+        greens[i].setAttribute('r', String(r));
+        greens[i].setAttribute('opacity', String(greenOp));
+
+        // White highlight: only the front 25% of dots get a smaller white core
+        const whiteFrac = t > 0.75 ? (t - 0.75) / 0.25 : 0;
+        const whiteOp = whiteFrac * 0.35 * fadeMul;
+        const whiteR = r * 0.5;
+
+        whites[i].setAttribute('cx', String(pt.x));
+        whites[i].setAttribute('cy', String(pt.y));
+        whites[i].setAttribute('r', String(whiteR));
+        whites[i].setAttribute('opacity', String(whiteOp));
+      }
+
+      rafId = requestAnimationFrame(tick);
     };
-  }, [durationMs]);
 
-  const isDrawing = phase === 'drawing';
-  const isFading = phase === 'fading';
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [pathElement, durationMs, startedAt]);
 
-  return (
-    <path
-      d={d}
-      fill="none"
-      stroke="var(--color-survive)"
-      strokeWidth={2.5}
-      strokeLinecap="round"
-      strokeOpacity={isFading ? 0 : 0.55}
-      style={{
-        strokeDasharray: totalLength,
-        strokeDashoffset: isDrawing || isFading ? 0 : totalLength,
-        transition: isDrawing
-          ? `stroke-dashoffset ${durationMs}ms cubic-bezier(0.65, 0, 0.35, 1)`
-          : isFading
-          ? 'stroke-opacity 240ms ease-out'
-          : 'none',
-      }}
-    />
-  );
+  return <g ref={groupRef} filter="url(#trailBlur)" />;
 }

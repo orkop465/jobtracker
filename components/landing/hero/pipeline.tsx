@@ -47,8 +47,8 @@ interface ClosedCardSlot {
 
 interface ActiveTrail {
   id: string;
-  d: string;
-  totalLength: number;
+  pathName: string;
+  startedAt: number;
 }
 
 /** Initial column population for the 5 active stages. */
@@ -122,15 +122,11 @@ export function HeroPipeline() {
    * sync with the card's flight, then fades and is removed from state after
    * TRAIL_LIFETIME_MS.
    */
-  const spawnTrailFor = (pathName: string) => {
+  const spawnTrailFor = (pathName: string, now: number) => {
     if (!FORWARD_PATH_NAMES.has(pathName)) return;
-    const pathEl = pathsMapRef.current[pathName];
-    if (!pathEl) return;
-    const d = pathEl.getAttribute('d');
-    if (!d) return;
-    const totalLength = pathEl.getTotalLength();
+    if (!pathsMapRef.current[pathName]) return;
     const id = `trail-${++trailIdRef.current}`;
-    setActiveTrails((prev) => [...prev, { id, d, totalLength }]);
+    setActiveTrails((prev) => [...prev, { id, pathName, startedAt: now }]);
     setTimeout(() => {
       setActiveTrails((prev) => prev.filter((t) => t.id !== id));
     }, TRAIL_LIFETIME_MS);
@@ -240,7 +236,7 @@ export function HeroPipeline() {
         now,
       });
       // Spawn a green trail behind this forward flight.
-      spawnTrailFor(t.pathName);
+      spawnTrailFor(t.pathName, now);
     };
 
     const interval = setInterval(() => {
@@ -326,7 +322,7 @@ export function HeroPipeline() {
           <SankeyRibbons />
         </div>
 
-        {/* Trail overlay — short-lived green trails behind forward flights.
+        {/* Trail overlay — particle-based green trails behind forward flights.
             Same coordinate space as SankeyRibbons (full-width viewBox). */}
         <svg
           aria-hidden
@@ -334,14 +330,23 @@ export function HeroPipeline() {
           viewBox="0 0 1000 300"
           preserveAspectRatio="none"
         >
-          {activeTrails.map((trail) => (
-            <FlightTrail
-              key={trail.id}
-              d={trail.d}
-              totalLength={trail.totalLength}
-              durationMs={FLIGHT_DURATION_MS}
-            />
-          ))}
+          <defs>
+            <filter id="trailBlur">
+              <feGaussianBlur stdDeviation="5" />
+            </filter>
+          </defs>
+          {activeTrails.map((trail) => {
+            const pathEl = pathsMapRef.current[trail.pathName];
+            if (!pathEl) return null;
+            return (
+              <FlightTrail
+                key={trail.id}
+                pathElement={pathEl}
+                startedAt={trail.startedAt}
+                durationMs={FLIGHT_DURATION_MS}
+              />
+            );
+          })}
         </svg>
 
         {/* Flying cards overlay — full width to cover the Closed column path. */}

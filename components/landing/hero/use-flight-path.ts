@@ -20,6 +20,12 @@ interface UseFlightPathOptions {
  * Drives one flying card along a static SVG path. Uses requestAnimationFrame
  * to update transform each frame. Hardware-accelerated (transform + opacity).
  * Respects prefers-reduced-motion by skipping directly to onComplete.
+ *
+ * The path coordinates live in the SVG's viewBox (1000 × 300) which is
+ * stretched to the hero container via preserveAspectRatio="none". This hook
+ * reads the SVG's rendered dimensions at start and scales every
+ * getPointAtLength result to actual pixels so the flying DOM card lands
+ * on the correct column regardless of viewport width.
  */
 export function useFlightPath({
   pathElement,
@@ -40,10 +46,22 @@ export function useFlightPath({
       return;
     }
 
+    // Compute viewBox → pixel scale factors.
+    const svg = pathElement.ownerSVGElement;
+    if (!svg) return;
+    const vb = svg.viewBox.baseVal;
+    const svgRect = svg.getBoundingClientRect();
+    const scaleX = svgRect.width / (vb.width || 1000);
+    const scaleY = svgRect.height / (vb.height || 300);
+
     const totalLength = pathElement.getTotalLength();
-    const startPoint = pathElement.getPointAtLength(0);
     const card = cardRef.current;
-    card.style.transform = `translate(${startPoint.x}px, ${startPoint.y}px) scale(1)`;
+    const cardW = card.offsetWidth;
+    const cardH = card.offsetHeight;
+
+    // Position the card at the path start, centered on the point.
+    const sp = pathElement.getPointAtLength(0);
+    card.style.transform = `translate(${sp.x * scaleX - cardW / 2}px, ${sp.y * scaleY - cardH / 2}px) scale(1)`;
 
     const tick = () => {
       if (!cardRef.current) return;
@@ -53,9 +71,8 @@ export function useFlightPath({
       const eased = easeInOutCubic(progress);
 
       const pt = pathElement.getPointAtLength(eased * totalLength);
-      // Scale bump peaks at mid-flight and returns to 1.0 at either end.
       const scaleBump = 1 + 0.04 * (1 - Math.abs(eased - 0.5) * 2);
-      cardRef.current.style.transform = `translate(${pt.x}px, ${pt.y}px) scale(${scaleBump})`;
+      cardRef.current.style.transform = `translate(${pt.x * scaleX - cardW / 2}px, ${pt.y * scaleY - cardH / 2}px) scale(${scaleBump})`;
 
       if (progress >= 1) {
         if (!completedRef.current) {
