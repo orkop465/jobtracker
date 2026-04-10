@@ -45,7 +45,10 @@ function buildSegments(counts: Record<HeroStage, number>): Record<HeroStage, Mob
   const result = {} as Record<HeroStage, MobileSegment[]>;
   for (const stage of HERO_STAGES) {
     const delta = counts[stage] - HERO_BASELINE_COUNTS[stage];
-    const n = Math.max(1, Math.min(MAX_SEGMENTS, BASE_SEGMENTS[stage] + delta));
+    // Only grow above base — never shrink below it. Bookkeeping transitions
+    // silently reset counts to baseline, so clamping at base prevents the bar
+    // from visibly shrinking without an accompanying animation.
+    const n = Math.min(MAX_SEGMENTS, BASE_SEGMENTS[stage] + Math.max(0, delta));
     const segments: MobileSegment[] = [];
     for (let i = 0; i < n; i++) {
       // i=0 is the top (newest, faintest), i=n-1 is the bottom (oldest, darkest)
@@ -120,8 +123,12 @@ export function MobilePipeline({ state, onFlightComplete }: MobilePipelineProps)
       if (!sourceRect) continue;
 
       const sourceSegs = segments[fromStage];
-      const fromY = stackTopY(sourceRect, sourceSegs.length);
-      const topOpacity = sourceSegs[0]?.opacity ?? 0.25;
+      const topY = stackTopY(sourceRect, sourceSegs.length);
+      // Pick a random departure slot among the top third of the stack
+      const maxSlot = Math.max(1, Math.ceil(sourceSegs.length / 3));
+      const departSlot = Math.floor(Math.random() * maxSlot);
+      const fromY = topY + departSlot * (SEG_HEIGHT + SEG_GAP);
+      const departOpacity = sourceSegs[departSlot]?.opacity ?? 0.25;
 
       if (flight.to === 'dropoff') {
         newDrain.push({
@@ -129,7 +136,7 @@ export function MobilePipeline({ state, onFlightComplete }: MobilePipelineProps)
           x: sourceRect.x,
           y: fromY,
           width: sourceRect.width,
-          opacity: Math.max(0.25, topOpacity),
+          opacity: Math.max(0.3, departOpacity),
         });
       } else {
         const toStage = flight.to as HeroStage;
