@@ -6,7 +6,6 @@ export interface MobileSegment {
   id: string;
   /** 0-1 opacity value. Higher = lower in the stack (older). */
   opacity: number;
-  isNew?: boolean;
 }
 
 interface MobileBarStackProps {
@@ -15,11 +14,13 @@ interface MobileBarStackProps {
   flash: { kind: 'up' | 'down'; at: number } | null;
   segments: MobileSegment[];
   isOffer?: boolean;
+  /** Ref callback for the segment stack container (used for flight positioning). */
+  stackRef?: (el: HTMLDivElement | null) => void;
 }
 
 const FLASH_HOLD_MS = 400;
 
-export function MobileBarStack({ label, count, flash, segments, isOffer = false }: MobileBarStackProps) {
+export function MobileBarStack({ label, count, flash, segments, isOffer = false, stackRef }: MobileBarStackProps) {
   const [flashActive, setFlashActive] = useState(false);
   useEffect(() => {
     if (!flash) return;
@@ -34,16 +35,14 @@ export function MobileBarStack({ label, count, flash, segments, isOffer = false 
   return (
     <div className="flex flex-col items-center flex-1 min-w-0">
       {/* Segment stack — bottom aligned */}
-      <div className="w-full flex flex-col gap-[1.5px] justify-end h-[110px]">
+      <div ref={stackRef} className="w-full flex flex-col gap-[2px] justify-end h-[110px]">
         {segments.map((seg) => (
           <div
             key={seg.id}
-            className="h-[5px] rounded-[1.5px] transition-transform duration-200 ease-out"
+            className="h-[7px] rounded-[1.5px] transition-opacity duration-200 ease-out"
             style={{
               backgroundColor: segColor,
-              opacity: isOffer ? 0.35 : seg.opacity,
-              ['--seg-opacity' as string]: seg.opacity,
-              ...(seg.isNew ? { animation: 'segment-enter 300ms cubic-bezier(0.22, 1, 0.36, 1) both' } : {}),
+              opacity: seg.opacity,
             }}
           />
         ))}

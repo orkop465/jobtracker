@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-const DRAIN_DURATION_MS = 450;
+const DRAIN_DURATION_MS = 600;
 
 interface MobileDrainSegmentProps {
   id: string;
@@ -28,11 +28,11 @@ export function MobileDrainSegment({ id, x, y, width, opacity, onComplete }: Mob
 
   return (
     <div
-      className="absolute top-0 left-0 h-[5px] rounded-[1.5px] pointer-events-none z-30"
+      className="absolute top-0 left-0 h-[7px] rounded-[1.5px] pointer-events-none z-30"
       style={{
-        backgroundColor: 'var(--color-ink)',
+        backgroundColor: 'var(--color-sink)',
         ['--seg-opacity' as string]: opacity,
-        opacity,
+        opacity: Math.max(0.3, opacity),
         transform: `translate(${x}px, ${y}px)`,
         width: `${width}px`,
         animation: `segment-drain ${DRAIN_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1) both`,

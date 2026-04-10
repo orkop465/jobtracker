@@ -1,14 +1,24 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { HERO_STAGES, HERO_STAGE_LABELS, type HeroStage } from '@/lib/landing/constants';
+import { HERO_STAGES, HERO_STAGE_LABELS, HERO_BASELINE_COUNTS, type HeroStage } from '@/lib/landing/constants';
 import type { PipelineState } from './use-pipeline-state';
 import { MobileBarStack, type MobileSegment } from './mobile-bar-stack';
 import { MobileFlyingSegment } from './mobile-flying-segment';
 import { MobileDrainSegment } from './mobile-drain-segment';
 
-const MAX_SEGMENTS = 14;
-const FLIGHT_DURATION_MS = 450;
+/** Base segment counts per stage — creates the funnel shape. */
+const BASE_SEGMENTS: Record<HeroStage, number> = {
+  applied: 12,
+  screen: 8,
+  interview: 5,
+  final: 3,
+  offer: 2,
+};
+const MAX_SEGMENTS = 16;
+const FLIGHT_DURATION_MS = 800;
+const SEG_HEIGHT = 7;
+const SEG_GAP = 2;
 
 interface FlyingSegmentState {
   id: string;
@@ -26,25 +36,32 @@ interface DrainSegmentState {
   opacity: number;
 }
 
-/** Build proportional segment arrays from counts. */
+/**
+ * Build segment arrays using a delta from baseline counts.
+ * Each ±1 in count directly adds/removes one segment, making transitions visible.
+ * IDs are indexed from the bottom so React removes/adds from the top.
+ */
 function buildSegments(counts: Record<HeroStage, number>): Record<HeroStage, MobileSegment[]> {
-  const maxCount = Math.max(...HERO_STAGES.map((s) => counts[s]), 1);
   const result = {} as Record<HeroStage, MobileSegment[]>;
   for (const stage of HERO_STAGES) {
-    const n = Math.round((counts[stage] / maxCount) * MAX_SEGMENTS);
+    const delta = counts[stage] - HERO_BASELINE_COUNTS[stage];
+    const n = Math.max(1, Math.min(MAX_SEGMENTS, BASE_SEGMENTS[stage] + delta));
     const segments: MobileSegment[] = [];
     for (let i = 0; i < n; i++) {
-      // Opacity: higher at bottom (older), lower at top (newer)
-      const opacity = 0.08 + (1 - i / Math.max(n - 1, 1)) * 0.14;
-      segments.push({
-        id: `${stage}-${counts[stage]}-${i}`,
-        opacity,
-        isNew: i === 0,
-      });
+      // i=0 is the top (newest, faintest), i=n-1 is the bottom (oldest, darkest)
+      const opacity = 0.15 + (i / Math.max(n - 1, 1)) * 0.40;
+      // ID indexed from bottom so the top segment's key changes on count changes
+      segments.push({ id: `${stage}-${n - 1 - i}`, opacity });
     }
     result[stage] = segments;
   }
   return result;
+}
+
+/** Y position of the topmost segment in a stack with n segments. */
+function stackTopY(stackRect: { y: number; height: number }, n: number): number {
+  const totalHeight = n * SEG_HEIGHT + Math.max(0, n - 1) * SEG_GAP;
+  return stackRect.y + stackRect.height - totalHeight;
 }
 
 interface MobilePipelineProps {
@@ -54,35 +71,34 @@ interface MobilePipelineProps {
 
 export function MobilePipeline({ state, onFlightComplete }: MobilePipelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const barRefs = useRef<Partial<Record<HeroStage, HTMLDivElement>>>({});
+  const stackRefs = useRef<Partial<Record<HeroStage, HTMLDivElement>>>({});
   const [flyingSegments, setFlyingSegments] = useState<FlyingSegmentState[]>([]);
   const [drainSegments, setDrainSegments] = useState<DrainSegmentState[]>([]);
   const processedFlights = useRef<Set<string>>(new Set());
 
   const segments = useMemo(() => buildSegments(state.counts), [state.counts]);
 
-  // Check for reduced motion preference.
+  // Check for reduced motion preference (CSS fallback also squashes durations).
   const prefersReducedMotion = useMemo(() => {
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }, []);
 
-  const getBarRect = useCallback((stage: HeroStage) => {
-    const barEl = barRefs.current[stage];
+  const getStackRect = useCallback((stage: HeroStage) => {
+    const stackEl = stackRefs.current[stage];
     const container = containerRef.current;
-    if (!barEl || !container) return null;
-    const barBox = barEl.getBoundingClientRect();
+    if (!stackEl || !container) return null;
+    const stackBox = stackEl.getBoundingClientRect();
     const containerBox = container.getBoundingClientRect();
     return {
-      x: barBox.left - containerBox.left,
-      y: barBox.top - containerBox.top,
-      width: barBox.width,
-      height: barBox.height,
+      x: stackBox.left - containerBox.left,
+      y: stackBox.top - containerBox.top,
+      width: stackBox.width,
+      height: stackBox.height,
     };
   }, []);
 
   // Watch state.flying for new entries and spawn mobile animations.
-  // Collect new segments first, then batch-set state to avoid cascading renders.
   useEffect(() => {
     if (prefersReducedMotion) return;
 
@@ -96,45 +112,40 @@ export function MobilePipeline({ state, onFlightComplete }: MobilePipelineProps)
 
       const fromStage = flight.from as HeroStage;
       if (!HERO_STAGES.includes(fromStage as HeroStage)) {
-        // inflow — no source bar, skip flight animation (handled by segment-enter)
+        // inflow — no source bar, skip flight animation
         continue;
       }
 
-      const sourceRect = getBarRect(fromStage);
+      const sourceRect = getStackRect(fromStage);
       if (!sourceRect) continue;
 
-      // Pick a random y position within the source bar for departure point
-      const segHeight = 5;
-      const segGap = 1.5;
-      const sourceSegments = segments[fromStage];
-      const randomIdx = Math.floor(Math.random() * Math.max(sourceSegments.length, 1));
-      const segY = sourceRect.y + sourceRect.height - (randomIdx + 1) * (segHeight + segGap);
-      const removedOpacity = sourceSegments[randomIdx]?.opacity ?? 0.12;
+      const sourceSegs = segments[fromStage];
+      const fromY = stackTopY(sourceRect, sourceSegs.length);
+      const topOpacity = sourceSegs[0]?.opacity ?? 0.25;
 
       if (flight.to === 'dropoff') {
         newDrain.push({
           id: flight.cardId,
           x: sourceRect.x,
-          y: segY,
+          y: fromY,
           width: sourceRect.width,
-          opacity: removedOpacity,
+          opacity: Math.max(0.25, topOpacity),
         });
       } else {
-        // Forward flight
         const toStage = flight.to as HeroStage;
-        const destRect = getBarRect(toStage);
+        const destRect = getStackRect(toStage);
         if (!destRect) continue;
 
-        // Destination: top of the destination bar
-        const destSegments = segments[toStage];
-        const destY = destRect.y + destRect.height - (destSegments.length + 1) * (segHeight + segGap);
+        const destSegs = segments[toStage];
+        // Arrive one slot above current top of destination stack
+        const toY = stackTopY(destRect, destSegs.length + 1);
 
         newFlying.push({
           id: flight.cardId,
           fromStage,
           toStage,
-          fromRect: { x: sourceRect.x, y: segY, width: sourceRect.width },
-          toRect: { x: destRect.x, y: destY, width: destRect.width },
+          fromRect: { x: sourceRect.x, y: fromY, width: sourceRect.width },
+          toRect: { x: destRect.x, y: toY, width: destRect.width },
         });
       }
     }
@@ -142,7 +153,7 @@ export function MobilePipeline({ state, onFlightComplete }: MobilePipelineProps)
     // eslint-disable-next-line react-hooks/set-state-in-effect -- batched response to parent flight state
     if (newFlying.length) setFlyingSegments((prev) => [...prev, ...newFlying]);
     if (newDrain.length) setDrainSegments((prev) => [...prev, ...newDrain]);
-  }, [state.flying, segments, getBarRect, prefersReducedMotion]);
+  }, [state.flying, segments, getStackRect, prefersReducedMotion]);
 
   // Clean up processedFlights when flights complete
   useEffect(() => {
@@ -163,20 +174,19 @@ export function MobilePipeline({ state, onFlightComplete }: MobilePipelineProps)
   const handleDrainComplete = useCallback(
     (id: string) => {
       setDrainSegments((prev) => prev.filter((d) => d.id !== id));
-      // Drain = dropoff, the desktop handleComplete already handles count via dispatch
       onFlightComplete(id);
     },
     [onFlightComplete],
   );
 
-  const barRefCallbacks = useMemo(
+  const stackRefCallbacks = useMemo(
     () =>
       Object.fromEntries(
         HERO_STAGES.map((stage) => [
           stage,
           (el: HTMLDivElement | null) => {
-            if (el) barRefs.current[stage] = el;
-            else delete barRefs.current[stage];
+            if (el) stackRefs.current[stage] = el;
+            else delete stackRefs.current[stage];
           },
         ]),
       ) as Record<HeroStage, (el: HTMLDivElement | null) => void>,
@@ -191,13 +201,14 @@ export function MobilePipeline({ state, onFlightComplete }: MobilePipelineProps)
     >
       <div className="flex gap-1.5 items-end px-1">
         {HERO_STAGES.map((stage) => (
-          <div key={stage} ref={barRefCallbacks[stage]} className="flex-1 min-w-0">
+          <div key={stage} className="flex-1 min-w-0">
             <MobileBarStack
               label={HERO_STAGE_LABELS[stage]}
               count={state.counts[stage]}
               flash={state.lastFlash[stage] ?? null}
               segments={segments[stage]}
               isOffer={stage === 'offer'}
+              stackRef={stackRefCallbacks[stage]}
             />
           </div>
         ))}

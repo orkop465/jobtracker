@@ -16,7 +16,7 @@ interface MobileFlyingSegmentProps {
   onComplete: (id: string) => void;
 }
 
-const ARC_HEIGHT = 12; // pixels of upward arc at midpoint
+const ARC_HEIGHT = 18; // pixels of upward arc at midpoint
 
 export function MobileFlyingSegment({
   id,
@@ -67,10 +67,10 @@ export function MobileFlyingSegment({
   return (
     <div
       ref={ref}
-      className="absolute top-0 left-0 h-[5px] rounded-[1.5px] pointer-events-none z-30"
+      className="absolute top-0 left-0 h-[7px] rounded-[1.5px] pointer-events-none z-30"
       style={{
         backgroundColor: 'var(--color-survive)',
-        opacity: 0.45,
+        opacity: 0.7,
         transform: `translate(${from.x}px, ${from.y}px)`,
         width: `${from.width}px`,
       }}

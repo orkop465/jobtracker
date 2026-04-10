@@ -129,7 +129,7 @@ body {
 
 @keyframes segment-drain {
   from { opacity: var(--seg-opacity, 0.15); transform: translateY(0); }
-  to   { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 0; transform: translateY(36px); }
 }
 
 /* ============================================================
