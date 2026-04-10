@@ -7,9 +7,16 @@ import { MobileBarStack, type MobileSegment } from './mobile-bar-stack';
 import { MobileFlyingSegment } from './mobile-flying-segment';
 import { MobileDrainSegment } from './mobile-drain-segment';
 
-/** Base segment counts per stage — creates the funnel shape. */
+/**
+ * Base segment counts per stage — proportional to baseline counts via
+ * power scaling (exponent 0.45). This creates a funnel shape where the
+ * ratio between bars reflects the ratio between counts, compressed so
+ * that even small counts (Offer=4) get visible segments.
+ *
+ * Computed from HERO_BASELINE_COUNTS: 280→13, 87→8, 34→5, 9→3, 4→2.
+ */
 const BASE_SEGMENTS: Record<HeroStage, number> = {
-  applied: 12,
+  applied: 13,
   screen: 8,
   interview: 5,
   final: 3,
@@ -45,10 +52,7 @@ function buildSegments(counts: Record<HeroStage, number>): Record<HeroStage, Mob
   const result = {} as Record<HeroStage, MobileSegment[]>;
   for (const stage of HERO_STAGES) {
     const delta = counts[stage] - HERO_BASELINE_COUNTS[stage];
-    // Only grow above base — never shrink below it. Bookkeeping transitions
-    // silently reset counts to baseline, so clamping at base prevents the bar
-    // from visibly shrinking without an accompanying animation.
-    const n = Math.min(MAX_SEGMENTS, BASE_SEGMENTS[stage] + Math.max(0, delta));
+    const n = Math.max(1, Math.min(MAX_SEGMENTS, BASE_SEGMENTS[stage] + delta));
     const segments: MobileSegment[] = [];
     for (let i = 0; i < n; i++) {
       // i=0 is the top (newest, faintest), i=n-1 is the bottom (oldest, darkest)
