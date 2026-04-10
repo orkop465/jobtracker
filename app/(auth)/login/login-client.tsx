@@ -29,15 +29,14 @@ function LoginContent() {
   const sp = useSearchParams();
   const callbackUrl = sp.get('callbackUrl') ?? '/app';
   const oauthError = sp.get('error');
+  const verified = sp.get('verified') === 'true';
+  const verifyError = sp.get('verifyError');
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Custom credentials POST flow — uses NextAuth's CSRF + callback endpoints
-  // directly so the session cookie is set by the server. Preserved verbatim
-  // from the previous implementation; only the visual layer changes.
   async function onCredentials(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErr(null);
@@ -46,11 +45,17 @@ function LoginContent() {
       const csrfRes = await fetch('/api/auth/csrf');
       const { csrfToken } = await csrfRes.json();
 
-      await fetch('/api/auth/callback/credentials', {
+      const callbackRes = await fetch('/api/auth/callback/credentials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ csrfToken, email, password }),
+        redirect: 'manual',
       });
+
+      if (callbackRes.status === 429) {
+        setErr('Too many login attempts. Please try again later.');
+        return;
+      }
 
       const sessionRes = await fetch('/api/auth/session');
       const session = await sessionRes.json();
@@ -77,6 +82,24 @@ function LoginContent() {
       <p className="text-[14px] text-[var(--color-ink-muted)] mb-8">
         Pick up where you left off.
       </p>
+
+      {verified && (
+        <div className="mb-5 px-3 py-2.5 border border-[var(--color-survive)] bg-[var(--color-survive-soft)] text-[11px] text-[var(--color-survive)] rounded-md">
+          Email verified. You can now sign in.
+        </div>
+      )}
+
+      {verifyError === 'expired' && (
+        <div className="mb-5 px-3 py-2.5 border border-[var(--color-line)] bg-[var(--color-canvas)] text-[11px] text-[var(--color-sink)] rounded-md">
+          Verification link expired or already used. Please register again to get a new link.
+        </div>
+      )}
+
+      {verifyError === 'invalid' && (
+        <div className="mb-5 px-3 py-2.5 border border-[var(--color-line)] bg-[var(--color-canvas)] text-[11px] text-[var(--color-sink)] rounded-md">
+          Invalid verification link. Please register again to get a new link.
+        </div>
+      )}
 
       {oauthError === 'OAuthAccountNotLinked' && (
         <div className="mb-5 px-3 py-2.5 border border-[var(--color-line)] bg-[var(--color-canvas)] text-[11px] text-[var(--color-sink)] rounded-md">
@@ -127,9 +150,13 @@ function LoginContent() {
           disabled={busy}
           className="w-full h-12 bg-[var(--color-ink)] text-[var(--color-canvas)] rounded-md text-[14px] font-medium hover:bg-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {busy ? 'Signing in…' : 'Sign in'}
+          {busy ? 'Signing in...' : 'Sign in'}
         </button>
       </form>
+
+      <div className="mt-3 text-[11px] text-[var(--color-ink-muted)]">
+        Just registered? Check your inbox for a verification link before signing in.
+      </div>
 
       <div className="my-6 flex items-center gap-3">
         <div className="flex-1 h-px bg-[var(--color-line)]" />
@@ -161,7 +188,7 @@ function LoginContent() {
       <div className="mt-8 text-center text-[12px] text-[var(--color-ink-muted)]">
         No account?{' '}
         <Link href="/register" className="underline hover:text-[var(--color-ink)]">
-          Create one →
+          Create one
         </Link>
       </div>
     </AuthShell>
