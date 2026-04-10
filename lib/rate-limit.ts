@@ -16,8 +16,8 @@ interface BucketConfig {
 }
 
 const CONFIG: Record<Bucket, BucketConfig> = {
-  // 10 register attempts per IP per 10 minutes.
-  register: { limit: 10, windowMs: 10 * 60 * 1000 },
+  // 5 register attempts per IP per 10 minutes (each triggers an email).
+  register: { limit: 5, windowMs: 10 * 60 * 1000 },
   // 10 credentials login attempts per IP per minute.
   credentials: { limit: 10, windowMs: 60 * 1000 },
 };
