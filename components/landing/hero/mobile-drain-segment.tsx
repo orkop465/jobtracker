@@ -28,13 +28,14 @@ export function MobileDrainSegment({ id, x, y, width, opacity, onComplete }: Mob
 
   return (
     <div
-      className="absolute top-0 left-0 h-[7px] rounded-[1.5px] pointer-events-none z-30"
+      className="absolute h-[7px] rounded-[1.5px] pointer-events-none z-30"
       style={{
+        left: `${x}px`,
+        top: `${y}px`,
+        width: `${width}px`,
         backgroundColor: 'var(--color-sink)',
         ['--seg-opacity' as string]: opacity,
         opacity: Math.max(0.3, opacity),
-        transform: `translate(${x}px, ${y}px)`,
-        width: `${width}px`,
         animation: `segment-drain ${DRAIN_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1) both`,
       }}
     />
