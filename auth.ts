@@ -100,6 +100,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!user?.passwordHash || !ok) return null;
 
+        // Block unverified credentials accounts. This check happens AFTER
+        // bcrypt.compare so the timing is already equalized.
+        if (!user.emailVerified) return null;
+
         return {
           id: user.id,
           email: user.email,
