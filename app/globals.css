@@ -71,6 +71,11 @@ body {
   to   { opacity: 1; }
 }
 
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
 @keyframes ribbon-breathe {
   0%, 100% { stroke-width: var(--breathe-min, 72px); }
   50%      { stroke-width: var(--breathe-max, 78px); }
