@@ -49,6 +49,7 @@ const UpdateApplicationSchema = z
     jobDescription: z.string().max(50000).optional().or(z.literal("")),
     priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional().nullable(),
     nextFollowUp: z.string().datetime().optional().or(z.literal("")).nullable(),
+    boardColumnId: z.string().optional().nullable(),
   })
   .strict()
   .refine(
@@ -144,8 +145,26 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       });
       if (!current) return { ok: false as const, reason: "not_found" };
 
-      const statusChanged =
-        typeof parsed.status === "string" && parsed.status !== current.status;
+      // Board column move
+      if (parsed.boardColumnId !== undefined) {
+        if (parsed.boardColumnId) {
+          const targetCol = await tx.boardColumn.findFirst({
+            where: { id: parsed.boardColumnId, userId },
+          });
+          if (!targetCol) {
+            return { ok: false as const, reason: "invalid_column" };
+          }
+          data.boardColumnId = targetCol.id;
+          // If column maps to a status, sync the status
+          if (targetCol.mappedStatus && targetCol.mappedStatus !== current.status) {
+            data.status = targetCol.mappedStatus;
+          }
+        } else {
+          data.boardColumnId = null;
+        }
+      }
+
+      const statusChanged = data.status && data.status !== current.status;
 
       // Conditional write — must include the observed status so a concurrent
       // status change loses deterministically instead of silently overwriting.
@@ -171,6 +190,9 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     });
 
     if (!result.ok) {
+      if (result.reason === "invalid_column") {
+        return NextResponse.json({ error: "Invalid board column" }, { status: 400 });
+      }
       if (result.reason === "conflict") {
         return NextResponse.json(
           { error: "Application was modified by another request. Please refresh and try again." },

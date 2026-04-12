@@ -118,28 +118,49 @@ export async function POST(req: Request) {
       }
     }
 
-    const created = await prisma.application.create({
-      data: {
-        userId,
-        company: parsed.company.trim(),
-        roleTitle: parsed.roleTitle.trim(),
-        jobUrl: parsed.jobUrl || null,
-        location: parsed.location || null,
-        status: parsed.status ?? "APPLIED",
-        appliedAt: parsed.appliedAt ? new Date(parsed.appliedAt) : new Date(),
-        resumeId: resumeIdToSet,
-        salaryMin: parsed.salaryMin ?? null,
-        salaryMax: parsed.salaryMax ?? null,
-        currency: parsed.currency || null,
-        contactName: parsed.contactName?.trim() || null,
-        contactEmail: parsed.contactEmail?.trim() || null,
-        contactLinkedIn: parsed.contactLinkedIn?.trim() || null,
-        notes: parsed.notes?.trim() || null,
-        source: parsed.source ?? null,
-        jobDescription: parsed.jobDescription?.trim() || null,
-        priority: parsed.priority ?? undefined,
-        nextFollowUp: parsed.nextFollowUp ? new Date(parsed.nextFollowUp) : null,
-      },
+    const created = await prisma.$transaction(async (tx) => {
+      const app = await tx.application.create({
+        data: {
+          userId,
+          company: parsed.company.trim(),
+          roleTitle: parsed.roleTitle.trim(),
+          jobUrl: parsed.jobUrl || null,
+          location: parsed.location || null,
+          status: parsed.status ?? "APPLIED",
+          appliedAt: parsed.appliedAt ? new Date(parsed.appliedAt) : new Date(),
+          resumeId: resumeIdToSet,
+          salaryMin: parsed.salaryMin ?? null,
+          salaryMax: parsed.salaryMax ?? null,
+          currency: parsed.currency || null,
+          contactName: parsed.contactName?.trim() || null,
+          contactEmail: parsed.contactEmail?.trim() || null,
+          contactLinkedIn: parsed.contactLinkedIn?.trim() || null,
+          notes: parsed.notes?.trim() || null,
+          source: parsed.source ?? null,
+          jobDescription: parsed.jobDescription?.trim() || null,
+          priority: parsed.priority ?? undefined,
+          nextFollowUp: parsed.nextFollowUp ? new Date(parsed.nextFollowUp) : null,
+        },
+      });
+
+      // Auto-assign to the column matching the status, or fall back to first column
+      const targetStatus = parsed.status ?? "APPLIED";
+      const col = await tx.boardColumn.findFirst({
+        where: { userId, mappedStatus: targetStatus as any },
+      }) ?? await tx.boardColumn.findFirst({
+        where: { userId },
+        orderBy: { position: "asc" },
+      });
+
+      if (col) {
+        await tx.application.update({
+          where: { id: app.id },
+          data: { boardColumnId: col.id },
+        });
+        return { ...app, boardColumnId: col.id };
+      }
+
+      return app;
     });
 
     return NextResponse.json({ item: created }, { status: 201 });
