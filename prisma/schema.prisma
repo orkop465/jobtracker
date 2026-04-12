@@ -53,6 +53,7 @@ model User {
   applications  Application[]
   resumes       Resume[]
   statusEvents  ApplicationStatusEvent[]
+  boardColumns  BoardColumn[]
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -131,6 +132,9 @@ model Application {
   resumeId String?
   resume   Resume? @relation(fields: [resumeId], references: [id], onDelete: SetNull)
 
+  boardColumnId String?
+  boardColumn   BoardColumn? @relation(fields: [boardColumnId], references: [id], onDelete: SetNull)
+
   salaryMin       Int?
   salaryMax       Int?
   currency        String?            @default("USD")
@@ -155,6 +159,21 @@ model Application {
   @@index([userId, updatedAt])
   @@index([resumeId])
   @@index([company])
+  @@index([boardColumnId])
+}
+
+model BoardColumn {
+  id           String             @id @default(cuid())
+  userId       String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  position     Int
+  mappedStatus ApplicationStatus?
+  applications Application[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([userId, position])
 }
 
 model ApplicationStatusEvent {
