@@ -2,10 +2,6 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcrypt";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
-import {
-  sendVerificationEmail,
-  sendExistingAccountEmail,
-} from "@/lib/auth/verification";
 
 // OAuth synthetic email namespace — credentials users must never register here.
 const RESERVED_EMAIL_PATTERN = /@oauth\.local$/i;
@@ -13,21 +9,13 @@ const RESERVED_EMAIL_PATTERN = /@oauth\.local$/i;
 // Loose RFC-ish email shape.
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// OWASP: always return the same response shape. The client shows a
-// generic "check your email" message regardless of what happened.
-const GENERIC_OK = { ok: true };
-
-// Fire-and-forget email helper — decouples email latency from response
-// timing so an attacker can't distinguish "sent email" from "didn't send".
-function emailBackground(fn: () => Promise<void>) {
-  fn().catch((err) => console.error("Background email failed:", err));
-}
-
 export async function POST(req: Request) {
   const rl = checkRateLimit(req, "register");
   if (!rl.ok) {
-    await bcrypt.hash("timing-equalizer", 12);
-    return NextResponse.json(GENERIC_OK);
+    return NextResponse.json(
+      { error: "Too many attempts. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } },
+    );
   }
 
   try {
@@ -36,48 +24,46 @@ export async function POST(req: Request) {
     const password = body?.password;
     const email =
       typeof emailRaw === "string" ? emailRaw.toLowerCase().trim() : "";
-    const origin = new URL(req.url).origin;
 
-    // --- Input validation (generic response, no leak) ---
-    const inputInvalid =
+    if (
       !email ||
       !EMAIL_SHAPE.test(email) ||
-      RESERVED_EMAIL_PATTERN.test(email) ||
-      typeof password !== "string" ||
-      password.length < 8;
-
-    if (inputInvalid) {
-      await bcrypt.hash("timing-equalizer", 12);
-      return NextResponse.json(GENERIC_OK);
+      RESERVED_EMAIL_PATTERN.test(email)
+    ) {
+      return NextResponse.json(
+        { error: "Please enter a valid email address." },
+        { status: 400 },
+      );
     }
 
-    // --- Check for existing account ---
+    if (typeof password !== "string" || password.length < 8) {
+      return NextResponse.json(
+        { error: "Password must be at least 8 characters." },
+        { status: 400 },
+      );
+    }
+
+    // Check for existing account
     const existing = await prisma.user.findUnique({ where: { email } });
 
     if (existing) {
-      if (!existing.emailVerified && existing.passwordHash) {
-        // Unverified credentials account — update password + resend verification.
-        const passwordHash = await bcrypt.hash(password, 12);
-        await prisma.user.update({
-          where: { id: existing.id },
-          data: { passwordHash },
-        });
-        emailBackground(() => sendVerificationEmail(email, origin));
-      } else {
-        // Verified or OAuth account — inform via email, don't reveal in UI.
-        await bcrypt.hash("timing-equalizer", 12);
-        emailBackground(() => sendExistingAccountEmail(email, origin));
-      }
-      return NextResponse.json(GENERIC_OK);
+      return NextResponse.json(
+        { error: "An account with this email already exists." },
+        { status: 409 },
+      );
     }
 
-    // --- New user — create pending account + send verification ---
+    // Create user — immediately verified, no email flow
     const passwordHash = await bcrypt.hash(password, 12);
-    await prisma.user.create({ data: { email, passwordHash } });
-    emailBackground(() => sendVerificationEmail(email, origin));
+    await prisma.user.create({
+      data: { email, passwordHash },
+    });
 
-    return NextResponse.json(GENERIC_OK);
+    return NextResponse.json({ ok: true }, { status: 201 });
   } catch {
-    return NextResponse.json(GENERIC_OK);
+    return NextResponse.json(
+      { error: "Something went wrong. Please try again." },
+      { status: 500 },
+    );
   }
 }

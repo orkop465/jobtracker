@@ -15,9 +15,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MKVDATA — Precision Career Analytics",
+  title: "MKVDATA - Job Tracking & Analytics",
   description:
-    "Enterprise-grade job search analytics. Track your pipeline, measure conversion velocity, and optimize every application with data.",
+    "Consumer-grade job search analytics. Track your pipeline, measure conversion velocity, and optimize every application using real data.",
 };
 
 export default function RootLayout({
