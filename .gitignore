@@ -49,3 +49,8 @@ next-env.d.ts
 .mcp.json
 .planning/
 skills-lock.json
+.playwright-cli/
+.impeccable.md
+.vscode/
+docs/superpowers/
+public/design-reference/
