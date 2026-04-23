@@ -6,7 +6,6 @@ import { Card } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge, statusToBadgeVariant } from "@/components/ui/badge";
 import { QuickAddForm } from "@/components/quick-add-form";
-import { statusLabel } from "@/lib/constants";
 
 interface DashboardData {
   stats: {

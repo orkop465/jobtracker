@@ -1,52 +1,68 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 export function LandingNav() {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
+    const onScroll = () => setScrolled(window.scrollY > 24);
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  const handleAnchorClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
+    const href = e.currentTarget.getAttribute('href');
+    if (href && href.startsWith('#')) {
+      e.preventDefault();
+      const target = document.querySelector(href);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  }, []);
+
   return (
-    <nav
-      className={[
-        'sticky top-0 z-50 h-16 px-6 flex items-center justify-between bg-[var(--color-canvas)]',
-        'backdrop-blur-[8px] transition-[border-color] duration-[280ms]',
-        scrolled ? 'border-b border-[var(--color-line)]' : 'border-b border-transparent',
-      ].join(' ')}
-    >
-      <Link href="/" className="flex items-center gap-2.5">
-        <span
-          className="w-2 h-2 rounded-full bg-[var(--color-ink)]"
-          style={{ animation: 'live-dot 3s ease-in-out infinite' }}
-        />
-        <span className="font-mono text-[12px] tracking-[0.14em] uppercase font-semibold text-[var(--color-ink)]">
-          MKVDATA
-        </span>
-      </Link>
-      <div className="hidden md:flex items-center gap-6 font-mono text-[11px] text-[var(--color-ink-muted)]">
-        <a href="#how-it-works" className="hover:text-[var(--color-ink)] transition-colors">
-          How it works
+    <nav className="nav">
+      <div className="wrap nav-inner">
+        <a
+          className={`logo logo-morph${scrolled ? ' is-scrolled' : ''}`}
+          href="#"
+          aria-label="Maakavoda Data"
+          onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+        >
+          <span className="logo-mark"></span>
+          <span className="logo-text" aria-hidden="true">
+            <span className="logo-letter logo-keep">M</span>
+            <span className="logo-letter logo-fade">A</span>
+            <span className="logo-letter logo-fade">A</span>
+            <span className="logo-letter logo-keep">K</span>
+            <span className="logo-letter logo-fade">A</span>
+            <span className="logo-letter logo-keep">V</span>
+            <span className="logo-letter logo-fade">O</span>
+            <span className="logo-letter logo-fade">D</span>
+            <span className="logo-letter logo-fade">A</span>
+            <span className="logo-letter logo-gap">{'\u00A0'}</span>
+            <span className="logo-letter logo-keep">D</span>
+            <span className="logo-letter logo-keep">A</span>
+            <span className="logo-letter logo-keep">T</span>
+            <span className="logo-letter logo-keep">A</span>
+          </span>
         </a>
-        <a href="#anatomy" className="hover:text-[var(--color-ink)] transition-colors">
-          The 10 stages
-        </a>
-        <Link href="/login" className="hover:text-[var(--color-ink)] transition-colors">
-          Sign in
-        </Link>
+        <div className="nav-links">
+          <a href="#board" onClick={handleAnchorClick}>Board</a>
+          <a href="#stages" onClick={handleAnchorClick}>Pipeline</a>
+          <a href="#analytics" onClick={handleAnchorClick}>Analytics</a>
+          <a href="#marketplace" onClick={handleAnchorClick}>Resume market</a>
+          <a href="#">Changelog</a>
+        </div>
+        <div className="nav-cta">
+          <Link href="/login" className="btn btn-ghost">Sign in</Link>
+          <Link href="/register" className="btn btn-primary">Get started</Link>
+        </div>
       </div>
-      <Link
-        href="/register"
-        className="bg-[var(--color-ink)] text-[var(--color-canvas)] px-3 py-1.5 rounded-[5px] text-[11px] font-medium hover:bg-black transition-colors"
-      >
-        Start tracking →
-      </Link>
     </nav>
   );
 }

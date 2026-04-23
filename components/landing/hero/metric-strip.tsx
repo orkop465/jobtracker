@@ -23,7 +23,7 @@ export function MetricStrip() {
           </div>
           <div
             className={[
-              'text-[22px] font-medium tabular-nums tracking-[-0.02em]',
+              'text-[18px] sm:text-[22px] font-medium tabular-nums tracking-[-0.02em]',
               cell.label === 'Offers'
                 ? 'text-[var(--color-survive)]'
                 : 'text-[var(--color-ink)]',

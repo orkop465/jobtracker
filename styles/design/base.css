@@ -1,0 +1,91 @@
+/* Maakavoda — "Field Notes" theme: warm bone + deep olive ink + burnt amber accent */
+/* Fonts loaded via next/font in layout.tsx */
+
+:root {
+  /* Warm bone paper */
+  --bg:   oklch(0.967 0.012 85);
+  --bg-2: oklch(0.945 0.016 82);
+  --bg-3: oklch(0.920 0.018 78);
+  /* Deep olive-ink (not pure black, feels like archival ink) */
+  --ink:   oklch(0.25 0.035 125);
+  --ink-2: oklch(0.40 0.030 125);
+  --ink-3: oklch(0.56 0.024 120);
+  --line:   oklch(0.86 0.015 85);
+  --line-2: oklch(0.78 0.020 85);
+
+  /* Primary accent — burnt amber (signal color) */
+  --accent:      oklch(0.62 0.155 55);
+  --accent-soft: oklch(0.92 0.045 65);
+  --accent-ink:  oklch(0.46 0.14 50);
+
+  /* Secondary palette — map-legend style */
+  --sage:      oklch(0.60 0.10 150);
+  --sage-soft: oklch(0.92 0.03 150);
+  --sky:       oklch(0.58 0.09 235);
+  --sky-soft:  oklch(0.92 0.03 235);
+  --amber:     oklch(0.74 0.12 80);
+  --amber-soft:oklch(0.94 0.04 80);
+  --clay:      oklch(0.58 0.12 40);
+  --clay-soft: oklch(0.93 0.04 40);
+  --lilac:     oklch(0.62 0.08 310);
+  --lilac-soft:oklch(0.93 0.03 310);
+
+  /* Shadows — hairline + faint paper drop */
+  --shadow-sm: 0 1px 0 oklch(0.25 0.035 125 / 0.05);
+  --shadow-md: 0 1px 0 oklch(0.25 0.035 125 / 0.06), 0 2px 10px oklch(0.25 0.035 125 / 0.05);
+  --shadow-lg: 0 2px 0 oklch(0.25 0.035 125 / 0.06), 0 18px 48px oklch(0.25 0.035 125 / 0.08);
+
+  --radius: 4px;
+  --radius-lg: 8px;
+
+  --display: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  --sans:    'Inter Tight', system-ui, -apple-system, sans-serif;
+  --mono:    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+  font-feature-settings: 'ss01', 'cv11';
+}
+
+/* Subtle warm radials (no grid) */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.65;
+  background-image:
+    radial-gradient(circle at 85% 10%, oklch(0.62 0.155 55 / 0.06) 0, transparent 50%),
+    radial-gradient(circle at 10% 90%, oklch(0.60 0.10 150 / 0.05) 0, transparent 45%);
+  z-index: 0;
+}
+
+.wrap { position: relative; z-index: 1; max-width: 1240px; margin: 0 auto; padding: 0 32px; }
+
+/* ================ MOBILE (≤720px) ================ */
+@media (max-width: 720px) {
+  .wrap { padding: 0 20px; }
+  body { font-size: 14.5px; }
+
+  /* Nav — hamburger drawer */
+  .nav { padding: 12px 0; }
+  .nav-inner { flex-wrap: nowrap; gap: 10px; }
+  .nav-links { display: none !important; }
+  .nav-cta { gap: 6px; }
+  .nav-cta .btn { padding: 8px 12px; font-size: 12.5px; }
+  .nav-cta .btn-ghost { display: none; }
+  .logo-morph { font-size: 17px; letter-spacing: -0.01em; }
+  .logo-morph-scroll { display: none !important; }
+}
+

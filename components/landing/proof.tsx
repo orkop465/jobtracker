@@ -22,7 +22,7 @@ function ProofCounter({
   const displayed = useCountUp(value, { start, duration: 1200 });
   return (
     <div style={{ transitionDelay: `${delay}ms` }}>
-      <div className="text-[64px] leading-[1] font-semibold tabular-nums tracking-[-0.03em] text-[var(--color-ink)]">
+      <div className="text-[36px] sm:text-[48px] lg:text-[64px] leading-[1] font-semibold tabular-nums tracking-[-0.03em] text-[var(--color-ink)]">
         {prefix}
         {displayed.toLocaleString()}
         {suffix}
@@ -44,7 +44,7 @@ export function Proof() {
           <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-ink)]" />
           Across every user
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-12">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 lg:gap-12">
           {PROOF_COUNTERS.map((c, i) => (
             <ProofCounter
               key={c.label}

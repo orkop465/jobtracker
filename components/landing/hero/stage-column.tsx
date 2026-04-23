@@ -96,7 +96,7 @@ export function StageColumn({ label, count, flash, cards, variant = 'default' }:
       </h4>
       <div
         className={[
-          'border border-dashed border-[var(--color-line)] rounded-md min-h-[260px] p-1.5 flex flex-col gap-1',
+          'border border-dashed border-[var(--color-line)] rounded-md min-h-[120px] sm:min-h-[260px] p-1 sm:p-1.5 flex flex-col gap-0.5 sm:gap-1',
           isOffer && 'border-[var(--color-survive-soft)] bg-[rgba(21,128,61,0.03)]',
           isClosed && 'bg-[rgba(10,10,10,0.015)]',
         ]
