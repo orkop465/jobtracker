@@ -236,9 +236,9 @@ export function CardJourney() {
           } else {
             dotClass += ' cj-dot-hollow';
           }
-          const dotStyle: React.CSSProperties = {};
+          const dotStyle: Record<string, string> = {};
           if (!isBetween && (i <= episode.activeStageIndex || i <= episode.finalStageIndex)) {
-            dotStyle['--dot-color' as string] = JOURNEY_DOT_COLORS[s.id] ?? s.color;
+            dotStyle['--dot-color'] = JOURNEY_DOT_COLORS[s.id] ?? s.color;
           }
           return (
             <div key={s.id} className="cj-step">
