@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { auth } from "@/auth";
@@ -111,7 +112,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       }
     }
 
-    const data: Record<string, any> = {};
+    const data: Prisma.ApplicationUncheckedUpdateManyInput = {};
     if (typeof parsed.company === "string") data.company = parsed.company.trim();
     if (typeof parsed.roleTitle === "string") data.roleTitle = parsed.roleTitle.trim();
     if (typeof parsed.jobUrl === "string") data.jobUrl = parsed.jobUrl || null;
@@ -218,8 +219,11 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       : null;
 
     return NextResponse.json({ item });
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message ?? String(err) }, { status: 400 });
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : String(err) },
+      { status: 400 }
+    );
   }
 }
 

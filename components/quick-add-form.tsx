@@ -55,8 +55,8 @@ export function QuickAddForm({ resumes, onCreated }: QuickAddFormProps) {
       setResumeId("");
       setShowMore(false);
       onCreated();
-    } catch (err: any) {
-      toast(err.message ?? "Failed to add", "error");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Failed to add", "error");
     } finally {
       setSubmitting(false);
     }

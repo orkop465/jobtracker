@@ -37,16 +37,19 @@ export function StageColumn({ label, count, flash, cards, variant = 'default' }:
   const isOffer = variant === 'offer';
   const isClosed = variant === 'closed';
 
-  // Local "flash is active" mirror that auto-clears after FLASH_HOLD_MS so the
-  // count tint fades back to its base color via the transition-colors property.
-  // Without this, the count would stay tinted indefinitely between flash events.
-  const [flashActive, setFlashActive] = useState(false);
+  // Derive "flash is active" from whether the latest flash's timestamp has been
+  // marked as cleared. The effect only schedules the clear — it never sets state
+  // synchronously in the effect body (which would cause a cascading re-render).
+  // Without this auto-clear, the count tint would stay indefinitely between
+  // flash events; the transition-colors property handles the fade back.
+  const [clearedAt, setClearedAt] = useState<number | null>(null);
+  const flashActive = flash != null && flash.at !== clearedAt;
   useEffect(() => {
     if (!flash) return;
-    setFlashActive(true);
-    const t = setTimeout(() => setFlashActive(false), FLASH_HOLD_MS);
+    const at = flash.at;
+    const t = setTimeout(() => setClearedAt(at), FLASH_HOLD_MS);
     return () => clearTimeout(t);
-  }, [flash?.at]);
+  }, [flash]);
 
   return (
     <div className="flex flex-col relative">

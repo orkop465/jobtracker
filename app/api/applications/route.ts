@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { ApplicationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { auth } from "@/auth";
@@ -146,7 +147,7 @@ export async function POST(req: Request) {
       // Auto-assign to the column matching the status, or fall back to first column
       const targetStatus = parsed.status ?? "APPLIED";
       const col = await tx.boardColumn.findFirst({
-        where: { userId, mappedStatus: targetStatus as any },
+        where: { userId, mappedStatus: targetStatus as ApplicationStatus },
       }) ?? await tx.boardColumn.findFirst({
         where: { userId },
         orderBy: { position: "asc" },
@@ -164,10 +165,10 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ item: created }, { status: 201 });
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Keep errors consistent and JSON-parse-safe on the client.
     return NextResponse.json(
-      { error: err?.message ?? String(err) },
+      { error: err instanceof Error ? err.message : String(err) },
       { status: 400 }
     );
   }

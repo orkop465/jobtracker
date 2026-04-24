@@ -21,7 +21,6 @@ export async function GET() {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const now = new Date();
-  const twelveWeeksAgo = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000);
   // Rolling 12-month analytics window. This bounds the work the route does
   // for power users with thousands of historical applications and keeps
   // the response size predictable. groupBy counts (status totals) are still

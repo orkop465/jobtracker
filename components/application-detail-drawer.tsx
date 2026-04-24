@@ -154,8 +154,8 @@ export function ApplicationDetailDrawer({ app, resumes, open, onClose, onSaved, 
 
       toast("Application updated", "success");
       onSaved();
-    } catch (err: any) {
-      toast(err.message ?? "Save failed", "error");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Save failed", "error");
     } finally {
       setSaving(false);
     }
@@ -169,8 +169,8 @@ export function ApplicationDetailDrawer({ app, resumes, open, onClose, onSaved, 
       toast("Application deleted", "success");
       onDeleted();
       onClose();
-    } catch (err: any) {
-      toast(err.message ?? "Delete failed", "error");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Delete failed", "error");
     }
   }
 
@@ -181,8 +181,8 @@ export function ApplicationDetailDrawer({ app, resumes, open, onClose, onSaved, 
       if (!data.ok) throw new Error(data.error ?? "Undo failed");
       toast(`Status reverted to ${statusLabel(data.newStatus)}`, "success");
       onSaved();
-    } catch (err: any) {
-      toast(err.message ?? "Undo failed", "error");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Undo failed", "error");
     }
   }
 

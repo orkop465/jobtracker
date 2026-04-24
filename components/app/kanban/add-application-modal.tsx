@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useToast } from "@/components/ui/toast";
 import {
-  STATUS_OPTIONS,
   SOURCE_OPTIONS,
   PRIORITY_OPTIONS,
 } from "@/lib/constants";

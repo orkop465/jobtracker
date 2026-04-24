@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { ApplicationStatus, PrismaClient } from "@prisma/client";
 
 export const DEFAULT_COLUMNS = [
   { name: "Applied", mappedStatus: "APPLIED", position: 0 },
@@ -25,7 +25,7 @@ export async function seedDefaultColumns(
       userId,
       name: col.name,
       position: col.position,
-      mappedStatus: col.mappedStatus as any,
+      mappedStatus: col.mappedStatus as ApplicationStatus,
     })),
   });
 

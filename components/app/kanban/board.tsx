@@ -64,14 +64,14 @@ export function KanbanBoard() {
       const resRes = await fetch("/api/resumes");
       const resData = await resRes.json();
       setResumes(
-        (resData.items ?? []).map((r: any) => ({ id: r.id, label: r.label }))
+        (resData.items ?? []).map((r: { id: string; label: string }) => ({ id: r.id, label: r.label }))
       );
     } catch {
       toast("Failed to load board", "error");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     loadBoard();
@@ -152,7 +152,7 @@ export function KanbanBoard() {
 
     // Determine the column we're over
     const overColumnId =
-      (over.data.current as any)?.columnId ?? (over.id as string);
+      (over.data.current as { columnId?: string } | undefined)?.columnId ?? (over.id as string);
 
     // Check if this is actually a column ID
     const isColumn = columns.some((c) => c.id === overColumnId);
@@ -176,7 +176,7 @@ export function KanbanBoard() {
     if (!over) return;
 
     const overColumnId =
-      (over.data.current as any)?.columnId ?? (over.id as string);
+      (over.data.current as { columnId?: string } | undefined)?.columnId ?? (over.id as string);
     const isColumn = columns.some((c) => c.id === overColumnId);
     if (!isColumn) return;
 
@@ -191,7 +191,7 @@ export function KanbanBoard() {
       const updated = apps.find((a) => a.id === detailApp.id);
       if (updated) setDetailApp(updated);
     }
-  }, [apps]);
+  }, [apps, detailApp]);
 
   // ── Render ─────────────────────────────────────────────────
 

@@ -80,7 +80,10 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
       return NextResponse.json(result, { status });
     }
     return NextResponse.json(result);
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message ?? String(err) }, { status: 400 });
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : String(err) },
+      { status: 400 }
+    );
   }
 }

@@ -34,7 +34,10 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     });
 
     return NextResponse.json({ items });
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message ?? String(err) }, { status: 400 });
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : String(err) },
+      { status: 400 }
+    );
   }
 }

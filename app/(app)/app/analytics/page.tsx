@@ -5,6 +5,25 @@ import { Card } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import { ErrorBanner } from "@/components/ui/error-banner";
 
+type GoogleChartsDataTable = {
+  addColumn: (type: string, label: string) => void;
+  addRows: (rows: Array<[string, string, number]>) => void;
+};
+type GoogleChartsSankey = {
+  draw: (table: GoogleChartsDataTable, options: Record<string, unknown>) => void;
+};
+type GoogleChartsNamespace = {
+  visualization?: {
+    DataTable: new () => GoogleChartsDataTable;
+    Sankey: new (container: HTMLElement) => GoogleChartsSankey;
+  };
+  charts?: {
+    load: (version: string, options: { packages: string[] }) => void;
+    setOnLoadCallback: (callback: () => void) => void;
+  };
+};
+type WindowWithGoogle = Window & { google?: GoogleChartsNamespace };
+
 type AnalyticsPayload = {
   summary: {
     totalApplications: number;
@@ -73,7 +92,7 @@ export default function AnalyticsPage() {
 
     function draw() {
       if (cancelled) return;
-      const googleRef = (window as any).google;
+      const googleRef = (window as WindowWithGoogle).google;
       if (!googleRef?.visualization?.DataTable || !googleRef?.charts) return;
       const container = document.getElementById("sankey-chart");
       if (!container) return;
@@ -103,7 +122,7 @@ export default function AnalyticsPage() {
     }
 
     function ensureGoogleChartsLoaded() {
-      const existingGoogle = (window as any).google;
+      const existingGoogle = (window as WindowWithGoogle).google;
       if (existingGoogle?.charts) {
         existingGoogle.charts.load("current", { packages: ["sankey"] });
         existingGoogle.charts.setOnLoadCallback(draw);
@@ -116,7 +135,7 @@ export default function AnalyticsPage() {
       script.src = "https://www.gstatic.com/charts/loader.js";
       script.async = true;
       script.onload = () => {
-        const g = (window as any).google;
+        const g = (window as WindowWithGoogle).google;
         if (!g?.charts) { setChartErr("Failed to init Google Charts."); return; }
         g.charts.load("current", { packages: ["sankey"] });
         g.charts.setOnLoadCallback(draw);

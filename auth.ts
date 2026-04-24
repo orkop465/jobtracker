@@ -112,19 +112,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async jwt({ token, user, account, profile }) {
       if (user?.id) token.id = user.id;
-      if (account?.provider === "google" && typeof (profile as any)?.email === "string") {
-        token.displayEmail = String((profile as any).email).toLowerCase();
+      if (account?.provider === "google" && typeof profile?.email === "string") {
+        token.displayEmail = profile.email.toLowerCase();
       }
-      if (account?.provider === "github" && typeof (profile as any)?.email === "string") {
-        token.displayEmail = String((profile as any).email).toLowerCase();
+      if (account?.provider === "github" && typeof profile?.email === "string") {
+        token.displayEmail = profile.email.toLowerCase();
       }
       return token;
     },
     async session({ session, token }) {
       if (!session.user) return session;
-      if (token?.id) (session.user as any).id = String(token.id);
-      if (typeof (token as any).displayEmail === "string" && (token as any).displayEmail) {
-        session.user.email = (token as any).displayEmail;
+      if (token?.id) session.user.id = String(token.id);
+      if (typeof token.displayEmail === "string" && token.displayEmail) {
+        session.user.email = token.displayEmail;
       }
       return session;
     },

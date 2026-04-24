@@ -6,14 +6,18 @@ import React, { useRef, useState, useEffect } from 'react';
 
 function useInView(ref: React.RefObject<HTMLElement | null>, opts: IntersectionObserverInit = { threshold: 0.25 }): boolean {
   const [inView, setInView] = useState(false);
+  // Destructure to primitive deps so an inline opts literal doesn't cause
+  // the observer to be re-created on every render.
+  const { threshold, root, rootMargin } = opts;
   useEffect(() => {
-    if (!ref.current) return;
+    const node = ref.current;
+    if (!node) return;
     const obs = new IntersectionObserver(([e]) => {
       if (e.isIntersecting) { setInView(true); obs.disconnect(); }
-    }, opts);
-    obs.observe(ref.current);
+    }, { threshold, root, rootMargin });
+    obs.observe(node);
     return () => obs.disconnect();
-  }, []);
+  }, [ref, threshold, root, rootMargin]);
   return inView;
 }
 

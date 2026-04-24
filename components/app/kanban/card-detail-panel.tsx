@@ -151,8 +151,8 @@ export function CardDetailPanel({
 
       toast("Application updated", "success");
       onSaved();
-    } catch (err: any) {
-      toast(err.message ?? "Save failed", "error");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Save failed", "error");
     } finally {
       setSaving(false);
     }
@@ -167,8 +167,8 @@ export function CardDetailPanel({
       if (!res.ok) throw new Error("Delete failed");
       toast("Application deleted", "success");
       onDeleted();
-    } catch (err: any) {
-      toast(err.message ?? "Delete failed", "error");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Delete failed", "error");
     }
   }
 
@@ -181,8 +181,8 @@ export function CardDetailPanel({
       if (!data.ok) throw new Error(data.error ?? "Undo failed");
       toast(`Status reverted to ${statusLabel(data.newStatus)}`, "success");
       onSaved();
-    } catch (err: any) {
-      toast(err.message ?? "Undo failed", "error");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Undo failed", "error");
     }
   }
 
