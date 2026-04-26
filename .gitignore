@@ -52,5 +52,7 @@ skills-lock.json
 .playwright-cli/
 .impeccable.md
 .vscode/
-docs/superpowers/
+# Local-only working docs (CI rollout notes, scratch design specs).
+# Force-add specific files with `git add -f docs/<file>` if you want them tracked.
+/docs/
 public/design-reference/
