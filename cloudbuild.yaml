@@ -7,6 +7,14 @@ substitutions:
 steps:
   - id: Install deps
     name: node:20-slim
+    # `prisma generate` loads `prisma.config.ts`, which calls
+    # `env("DATABASE_URL")` at startup. Without a value, Prisma 7
+    # aborts with PrismaConfigEnvError. We don't connect to the DB
+    # here — `generate` only emits the typed client into
+    # node_modules — so a placeholder URL is sufficient and matches
+    # what the Dockerfile builder stage already does.
+    env:
+      - 'DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/placeholder'
     entrypoint: bash
     args:
       - -c
