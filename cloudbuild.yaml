@@ -94,3 +94,11 @@ steps:
 
 images:
   - "$_IMAGE"
+
+# Required when the trigger runs as a custom service account (the
+# Compute Engine default SA, in our case). Without this, Cloud Build
+# refuses to start because the legacy default logs bucket is owned
+# by the legacy CB SA, not our trigger's SA. CLOUD_LOGGING_ONLY sends
+# build logs to Cloud Logging (no GCS bucket needed).
+options:
+  logging: CLOUD_LOGGING_ONLY
