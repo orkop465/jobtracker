@@ -56,7 +56,6 @@ export function LandingNav() {
           <a href="#stages" onClick={handleAnchorClick}>Pipeline</a>
           <a href="#analytics" onClick={handleAnchorClick}>Analytics</a>
           <a href="#marketplace" onClick={handleAnchorClick}>Resume market</a>
-          <a href="#">Changelog</a>
         </div>
         <div className="nav-cta">
           <Link href="/login" className="btn btn-ghost">Sign in</Link>

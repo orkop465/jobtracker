@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "../styles/design/app-shell.css";
+@import "../styles/design/dashboard.css";
 
 @theme inline {
   /* canvas */
