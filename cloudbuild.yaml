@@ -92,13 +92,20 @@ steps:
       - $_REGION
       - --to-latest
 
-images:
-  - "$_IMAGE"
-
-# Required when the trigger runs as a custom service account (the
-# Compute Engine default SA, in our case). Without this, Cloud Build
-# refuses to start because the legacy default logs bucket is owned
-# by the legacy CB SA, not our trigger's SA. CLOUD_LOGGING_ONLY sends
-# build logs to Cloud Logging (no GCS bucket needed).
+# NOTE: no top-level `images:` block. The explicit `Push image` step
+# above already pushes to Artifact Registry; an `images:` block would
+# duplicate that push and adds a substitution surface we don't need.
+#
+# Options:
+# - logging: CLOUD_LOGGING_ONLY — required when the trigger runs as a
+#   custom service account (Compute Engine default, in our case).
+#   Without this, Cloud Build refuses to start because the legacy
+#   default logs bucket is owned by the legacy CB SA. Sends build logs
+#   to Cloud Logging instead of a GCS bucket.
+# - dynamic_substitutions: true — required so built-in substitutions
+#   ($PROJECT_ID, $COMMIT_SHA, $SHORT_SHA) inside user-defined
+#   substitutions (here, $_IMAGE) are expanded at runtime instead of
+#   being passed through as literal strings.
 options:
   logging: CLOUD_LOGGING_ONLY
+  dynamic_substitutions: true
