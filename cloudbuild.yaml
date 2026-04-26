@@ -2,7 +2,6 @@ substitutions:
   _REGION: us-central1
   _SERVICE: jobtracker
   _MIGRATE_JOB: jobtracker-migrate
-  _IMAGE: us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/jobtracker:$COMMIT_SHA
 
 steps:
   - id: Install deps
@@ -34,14 +33,28 @@ steps:
     args: ["test"]
     waitFor: ["Install deps"]
 
+  # Image reference is inlined in every step that needs it.
+  # Cloud Build's nested-substitution behavior (a user-defined
+  # substitution whose VALUE contains built-in `$PROJECT_ID` /
+  # `$COMMIT_SHA`) does not actually expand the inner tokens at
+  # runtime, despite docs suggesting `options.dynamic_substitutions`
+  # would. Built-in substitutions DIRECTLY in step args are
+  # documented and reliable, so the image string is repeated
+  # verbatim in each step instead.
   - id: Build image
     name: gcr.io/cloud-builders/docker
-    args: ["build", "-t", "$_IMAGE", "."]
+    args:
+      - build
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/jobtracker:$COMMIT_SHA
+      - .
     waitFor: ["Lint", "Test"]
 
   - id: Push image
     name: gcr.io/cloud-builders/docker
-    args: ["push", "$_IMAGE"]
+    args:
+      - push
+      - us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/jobtracker:$COMMIT_SHA
 
   # Deploy a new revision but DO NOT shift traffic yet. If migrations fail
   # below, traffic stays on the previous good revision and users see no
@@ -54,7 +67,7 @@ steps:
       - deploy
       - $_SERVICE
       - --image
-      - $_IMAGE
+      - us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/jobtracker:$COMMIT_SHA
       - --region
       - $_REGION
       - --allow-unauthenticated
@@ -71,7 +84,7 @@ steps:
       - update
       - $_MIGRATE_JOB
       - --image
-      - $_IMAGE
+      - us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/jobtracker:$COMMIT_SHA
       - --region
       - $_REGION
 
@@ -100,20 +113,11 @@ steps:
       - $_REGION
       - --to-latest
 
-# NOTE: no top-level `images:` block. The explicit `Push image` step
-# above already pushes to Artifact Registry; an `images:` block would
-# duplicate that push and adds a substitution surface we don't need.
-#
 # Options:
 # - logging: CLOUD_LOGGING_ONLY — required when the trigger runs as a
 #   custom service account (Compute Engine default, in our case).
 #   Without this, Cloud Build refuses to start because the legacy
 #   default logs bucket is owned by the legacy CB SA. Sends build logs
 #   to Cloud Logging instead of a GCS bucket.
-# - dynamic_substitutions: true — required so built-in substitutions
-#   ($PROJECT_ID, $COMMIT_SHA, $SHORT_SHA) inside user-defined
-#   substitutions (here, $_IMAGE) are expanded at runtime instead of
-#   being passed through as literal strings.
 options:
   logging: CLOUD_LOGGING_ONLY
-  dynamic_substitutions: true
