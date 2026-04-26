@@ -37,6 +37,18 @@ enum ApplicationStatus {
   GHOSTED
 }
 
+enum InterviewType {
+  RECRUITER_SCREEN
+  PHONE_SCREEN
+  TECHNICAL
+  SYSTEM_DESIGN
+  BEHAVIORAL
+  TAKE_HOME
+  ONSITE
+  PANEL
+  OTHER
+}
+
 model User {
   id            String    @id @default(cuid())
   email         String?   @unique
@@ -54,6 +66,10 @@ model User {
   resumes       Resume[]
   statusEvents  ApplicationStatusEvent[]
   boardColumns  BoardColumn[]
+  followUps     FollowUp[]
+  interviews    Interview[]
+
+  weeklyGoal    Int?
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -148,6 +164,8 @@ model Application {
   nextFollowUp    DateTime?
 
   statusEvents ApplicationStatusEvent[]
+  followUps    FollowUp[]
+  interviews   Interview[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -198,4 +216,46 @@ model ApplicationStatusEvent {
   @@index([userId])
   @@index([applicationId, occurredAt])
   @@index([applicationId, createdAt])
+}
+
+model FollowUp {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  title     String
+  dueDate   DateTime
+  done      Boolean   @default(false)
+  doneAt    DateTime?
+  snoozedTo DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, done, dueDate])
+  @@index([applicationId])
+}
+
+model Interview {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applicationId String
+  application   Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  title       String
+  scheduledAt DateTime
+  durationMin Int?
+  type        InterviewType @default(OTHER)
+  location    String?
+  notes       String?
+  completed   Boolean       @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, scheduledAt])
+  @@index([applicationId])
 }
