@@ -55,4 +55,6 @@ skills-lock.json
 # Local-only working docs (CI rollout notes, scratch design specs).
 # Force-add specific files with `git add -f docs/<file>` if you want them tracked.
 /docs/
+# Temporary Cloud Build validation configs. Submit manually; never trigger-wired.
+/cloudbuild-test*.yaml
 public/design-reference/
