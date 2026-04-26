@@ -41,3 +41,18 @@ yarn-error.log*
 next-env.d.ts
 
 /app/generated/prisma
+.aidesigner/
+.agents/
+.claude/
+.superpowers/
+.devcontainer/
+.mcp.json
+.planning/
+skills-lock.json
+.playwright-cli/
+.impeccable.md
+.vscode/
+# Local-only working docs (CI rollout notes, scratch design specs).
+# Force-add specific files with `git add -f docs/<file>` if you want them tracked.
+/docs/
+public/design-reference/

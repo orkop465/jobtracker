@@ -6,20 +6,256 @@ datasource db {
   provider = "postgresql"
 }
 
+enum ApplicationSource {
+  LINKEDIN
+  INDEED
+  GLASSDOOR
+  COMPANY_WEBSITE
+  REFERRAL
+  RECRUITER_OUTREACH
+  JOB_BOARD
+  CAREER_FAIR
+  OTHER
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 enum ApplicationStatus {
   APPLIED
-  SCREEN
-  INTERVIEW
+  RECRUITER_SCREEN
+  OA
+  INTERVIEW_ROUND_1
+  INTERVIEW_ROUND_2
+  INTERVIEW_ROUND_3
   OFFER
   REJECTED
   WITHDRAWN
+  GHOSTED
+}
+
+enum InterviewType {
+  RECRUITER_SCREEN
+  PHONE_SCREEN
+  TECHNICAL
+  SYSTEM_DESIGN
+  BEHAVIORAL
+  TAKE_HOME
+  ONSITE
+  PANEL
+  OTHER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String?   @unique
+  name          String?
+  image         String?
+  emailVerified DateTime?
+
+  /// Credentials login (null for OAuth-only accounts)
+  passwordHash  String?
+
+  accounts      Account[]
+  sessions      Session[]
+
+  applications  Application[]
+  resumes       Resume[]
+  statusEvents  ApplicationStatusEvent[]
+  boardColumns  BoardColumn[]
+  followUps     FollowUp[]
+  interviews    Interview[]
+
+  weeklyGoal    Int?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+
+  refresh_token      String?
+  access_token       String?
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?
+  session_state      String?
+
+  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Resume {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  label     String
+  gcsPath   String   @unique
+  filename  String
+  mimeType  String
+  sizeBytes Int
+  createdAt DateTime @default(now())
+
+  applications Application[]
+
+  @@index([userId])
 }
 
 model Application {
-  id        String            @id @default(cuid())
+  id String @id @default(cuid())
+
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   company   String
   roleTitle String
+  jobUrl    String?
+  location  String?
   status    ApplicationStatus @default(APPLIED)
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  appliedAt DateTime          @default(now())
+
+  resumeId String?
+  resume   Resume? @relation(fields: [resumeId], references: [id], onDelete: SetNull)
+
+  boardColumnId String?
+  boardColumn   BoardColumn? @relation(fields: [boardColumnId], references: [id], onDelete: SetNull)
+
+  salaryMin       Int?
+  salaryMax       Int?
+  currency        String?            @default("USD")
+  contactName     String?
+  contactEmail    String?
+  contactLinkedIn String?
+  notes           String?
+  source          ApplicationSource?
+  jobDescription  String?
+  priority        Priority?          @default(MEDIUM)
+  nextFollowUp    DateTime?
+
+  statusEvents ApplicationStatusEvent[]
+  followUps    FollowUp[]
+  interviews   Interview[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, appliedAt])
+  @@index([userId, nextFollowUp])
+  @@index([userId, updatedAt])
+  @@index([resumeId])
+  @@index([company])
+  @@index([boardColumnId])
+}
+
+model BoardColumn {
+  id           String             @id @default(cuid())
+  userId       String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  position     Int
+  mappedStatus ApplicationStatus?
+  applications Application[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([userId, position])
+}
+
+model ApplicationStatusEvent {
+  id            String @id @default(cuid())
+
+  userId        String
+  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  fromStatus ApplicationStatus
+  toStatus   ApplicationStatus
+
+  occurredAt DateTime @default(now())
+
+  voidedAt   DateTime?
+  voidedById String?   // keep for future audit; do NOT make this unique
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([applicationId, occurredAt])
+  @@index([applicationId, createdAt])
+}
+
+model FollowUp {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  title     String
+  dueDate   DateTime
+  done      Boolean   @default(false)
+  doneAt    DateTime?
+  snoozedTo DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, done, dueDate])
+  @@index([applicationId])
+}
+
+model Interview {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applicationId String
+  application   Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  title       String
+  scheduledAt DateTime
+  durationMin Int?
+  type        InterviewType @default(OTHER)
+  location    String?
+  notes       String?
+  completed   Boolean       @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, scheduledAt])
+  @@index([applicationId])
 }

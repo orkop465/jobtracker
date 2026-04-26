@@ -1,0 +1,96 @@
+substitutions:
+  _REGION: us-central1
+  _SERVICE: jobtracker
+  _MIGRATE_JOB: jobtracker-migrate
+  _IMAGE: us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/jobtracker:$COMMIT_SHA
+
+steps:
+  - id: Install deps
+    name: node:20-slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        npm ci --ignore-scripts
+        npx prisma generate
+
+  - id: Lint
+    name: node:20-slim
+    entrypoint: npm
+    args: ["run", "lint"]
+    waitFor: ["Install deps"]
+
+  - id: Test
+    name: node:20-slim
+    entrypoint: npm
+    args: ["test"]
+    waitFor: ["Install deps"]
+
+  - id: Build image
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "$_IMAGE", "."]
+    waitFor: ["Lint", "Test"]
+
+  - id: Push image
+    name: gcr.io/cloud-builders/docker
+    args: ["push", "$_IMAGE"]
+
+  # Deploy a new revision but DO NOT shift traffic yet. If migrations fail
+  # below, traffic stays on the previous good revision and users see no
+  # downtime / no schema mismatch.
+  - id: Deploy Cloud Run revision (no traffic)
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - $_SERVICE
+      - --image
+      - $_IMAGE
+      - --region
+      - $_REGION
+      - --allow-unauthenticated
+      - --no-traffic
+      - --tag
+      - rev-$SHORT_SHA
+
+  - id: Update migrate job image
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - update
+      - $_MIGRATE_JOB
+      - --image
+      - $_IMAGE
+      - --region
+      - $_REGION
+
+  - id: Run migrations
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - execute
+      - $_MIGRATE_JOB
+      - --region
+      - $_REGION
+      - --wait
+
+  # Migrations succeeded — promote the new revision to receive 100% of traffic.
+  - id: Promote new revision to 100% traffic
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update-traffic
+      - $_SERVICE
+      - --region
+      - $_REGION
+      - --to-latest
+
+images:
+  - "$_IMAGE"
