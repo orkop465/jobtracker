@@ -1,0 +1,61 @@
+# PR-validation pipeline. Wired to a separate Cloud Build trigger
+# that fires on Pull Request events targeting `main`. Posts a status
+# check to the PR's commit which GitHub branch protection requires
+# before allowing merge.
+#
+# What this DOES:
+#   1. Install deps (with placeholder DATABASE_URL for prisma generate)
+#   2. Lint (npm run lint)
+#   3. Test (npm test / vitest)
+#   4. Build image (docker build, no push) — catches `next build`
+#      failures that lint+test miss (type errors, etc.)
+#
+# What this does NOT do:
+#   - No `docker push` — image is not promoted anywhere; the build
+#     daemon discards it when the build VM exits.
+#   - No deploy / migrate / traffic shift — those happen only in
+#     `cloudbuild.yaml` after merge to main.
+#
+# Image refs are inlined for the same reason cloudbuild.yaml inlines
+# them: nested user-defined substitutions aren't reliably expanded
+# even with `dynamic_substitutions` enabled.
+
+steps:
+  - id: Install deps
+    name: node:20-slim
+    env:
+      - 'DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/placeholder'
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        npm ci --ignore-scripts
+        npx prisma generate
+
+  - id: Lint
+    name: node:20-slim
+    entrypoint: npm
+    args: ["run", "lint"]
+    waitFor: ["Install deps"]
+
+  - id: Test
+    name: node:20-slim
+    entrypoint: npm
+    args: ["test"]
+    waitFor: ["Install deps"]
+
+  # Build but DON'T push. Tag is local-only (no registry prefix), so
+  # the daemon discards it on VM exit. The point is verifying the
+  # Dockerfile builds successfully (which runs `next build` and
+  # catches TypeScript errors the lint step misses).
+  - id: Build image
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - jobtracker-pr-validate:$COMMIT_SHA
+      - .
+    waitFor: ["Lint", "Test"]
+
+options:
+  logging: CLOUD_LOGGING_ONLY
