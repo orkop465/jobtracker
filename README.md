@@ -163,3 +163,4 @@ IMAGE=$(gcloud run services describe jobtracker --region us-central1 \
 gcloud run jobs update jobtracker-migrate --region us-central1 --image $IMAGE
 gcloud run jobs execute jobtracker-migrate --region us-central1 --wait
 ```
+
