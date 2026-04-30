@@ -14,6 +14,7 @@ import {
   type DragStartEvent,
   MeasuringStrategy,
 } from "@dnd-kit/core";
+import { arrayMove } from "@dnd-kit/sortable";
 import { useToast } from "@/components/ui/toast";
 import type { BoardColumnType, KanbanApplication } from "@/lib/board/types";
 import {
@@ -582,15 +583,43 @@ export function KanbanBoard() {
     const targetCol = columns.find((c) => c.id === targetColumnId);
     if (!targetCol) return;
 
-    // Compute final position from over + cursor side. Uniform for
-    // same-column and cross-column drops; uses the same helpers the
-    // dragOver preview uses, so what the user sees IS what they get.
-    const targetCards = cardsInColumn(targetColumnId, new Set([activeId]));
+    // For same-column drop on another card, use arrayMove with the
+    // over-card's index — same swap semantics dnd-kit's
+    // verticalListSortingStrategy uses for the visual shift, so the
+    // commit matches what the user sees during the drag (no need to
+    // cross the over-card's midpoint to trigger the swap).
     const overCardId =
       overData?.type === "card" && overId !== activeId ? overId : null;
-    const side = sideFromCursor(event, overCardId);
-    const insertIdx = computeDropInsertIdx(targetCards, overCardId, side);
-    const finalPosition = computeDropPosition(targetCards, insertIdx);
+    const sourceColumnId =
+      original?.boardColumnId ??
+      columns.find((c) => c.mappedStatus === original?.status)?.id ??
+      null;
+    const sameColumn = sourceColumnId === targetColumnId;
+
+    let finalPosition: number;
+    if (sameColumn && overCardId) {
+      const colCards = cardsInColumn(targetColumnId);
+      const oldIdx = colCards.findIndex((c) => c.id === activeId);
+      const newIdx = colCards.findIndex((c) => c.id === overCardId);
+      if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return;
+      const reordered = arrayMove(colCards, oldIdx, newIdx);
+      const at = reordered.findIndex((c) => c.id === activeId);
+      const before = reordered[at - 1];
+      const after = reordered[at + 1];
+      if (!before && after) finalPosition = after.position - 1;
+      else if (before && !after) finalPosition = before.position + 1;
+      else if (before && after) {
+        const gap = after.position - before.position;
+        finalPosition =
+          gap > 0 ? before.position + gap / 2 : before.position + 0.5;
+      } else finalPosition = 1;
+    } else {
+      // Cross-column or drop on column body: use cursor side.
+      const targetCards = cardsInColumn(targetColumnId, new Set([activeId]));
+      const side = sideFromCursor(event, overCardId);
+      const insertIdx = computeDropInsertIdx(targetCards, overCardId, side);
+      finalPosition = computeDropPosition(targetCards, insertIdx);
+    }
 
     // Skip persistence when the drop lands at the original spot.
     if (
