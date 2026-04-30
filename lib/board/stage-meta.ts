@@ -162,3 +162,34 @@ export function formatNext(nextFollowUp: string | null | undefined): string | nu
   const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   return `${day} ${time}`;
 }
+
+// ── Drag-drop position math ────────────────────────────────────────
+// targetCards is the target column's cards excluding the dragging
+// card, sorted by position ascending.
+
+export function computeDropInsertIdx(
+  targetCards: { id: string }[],
+  overCardId: string | null,
+  side: "above" | "below",
+): number {
+  if (!overCardId) return targetCards.length;
+  const overIdx = targetCards.findIndex((c) => c.id === overCardId);
+  if (overIdx === -1) return targetCards.length;
+  return side === "below" ? overIdx + 1 : overIdx;
+}
+
+export function computeDropPosition(
+  targetCards: { position: number }[],
+  insertIdx: number,
+): number {
+  const before = targetCards[insertIdx - 1];
+  const after = targetCards[insertIdx];
+  if (!before && after) return after.position - 1;
+  if (before && !after) return before.position + 1;
+  if (before && after) {
+    const gap = after.position - before.position;
+    return gap > 0 ? before.position + gap / 2 : before.position + 0.5;
+  }
+  return 1;
+}
+

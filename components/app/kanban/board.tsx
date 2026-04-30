@@ -16,6 +16,8 @@ import {
 import { useToast } from "@/components/ui/toast";
 import type { BoardColumnType, KanbanApplication } from "@/lib/board/types";
 import {
+  computeDropInsertIdx,
+  computeDropPosition,
   isStalled,
   mapSourceToBucket,
   type SourceBucket,
@@ -486,23 +488,8 @@ export function KanbanBoard() {
         return new Date(a.appliedAt).getTime() - new Date(b.appliedAt).getTime();
       });
 
-    let insertIdx = targetCards.length;
-    if (overCardId) {
-      const overIdx = targetCards.findIndex((c) => c.id === overCardId);
-      if (overIdx !== -1) {
-        const activator = event.activatorEvent as
-          | { clientY?: number }
-          | null;
-        const overRect = over.rect;
-        let side: "above" | "below" = "above";
-        if (activator && typeof activator.clientY === "number" && overRect) {
-          const cursorY = activator.clientY + event.delta.y;
-          const overMid = overRect.top + overRect.height / 2;
-          side = cursorY < overMid ? "above" : "below";
-        }
-        insertIdx = side === "below" ? overIdx + 1 : overIdx;
-      }
-    }
+    const side = sideFromCursor(event, overCardId);
+    const insertIdx = computeDropInsertIdx(targetCards, overCardId, side);
 
     setDropPreview((prev) => {
       if (
@@ -514,6 +501,25 @@ export function KanbanBoard() {
       }
       return { columnId: targetColumnId, idx: insertIdx };
     });
+  }
+
+  function sideFromCursor(
+    event: DragOverEvent | DragEndEvent,
+    overCardId: string | null,
+  ): "above" | "below" {
+    if (!overCardId || !event.over) return "above";
+    const activator = event.activatorEvent as { clientY?: number } | null;
+    const overRect = event.over.rect;
+    if (
+      !activator ||
+      typeof activator.clientY !== "number" ||
+      !overRect
+    ) {
+      return "above";
+    }
+    const cursorY = activator.clientY + event.delta.y;
+    const overMid = overRect.top + overRect.height / 2;
+    return cursorY < overMid ? "above" : "below";
   }
 
   async function handleDragEnd(event: DragEndEvent) {
@@ -555,37 +561,14 @@ export function KanbanBoard() {
     if (!targetCol) return;
 
     // Compute final position from over + cursor side. Uniform for
-    // same-column and cross-column drops — uses neighbors in the
-    // target column to derive a fractional position.
+    // same-column and cross-column drops; uses the same helpers the
+    // dragOver preview uses, so what the user sees IS what they get.
     const targetCards = cardsInColumn(targetColumnId, new Set([activeId]));
-    let insertIdx = targetCards.length;
-    if (overData?.type === "card" && overId !== activeId) {
-      const overIdx = targetCards.findIndex((c) => c.id === overId);
-      if (overIdx !== -1) {
-        const activator = event.activatorEvent as
-          | { clientY?: number }
-          | null;
-        const overRect = over.rect;
-        let side: "above" | "below" = "above";
-        if (activator && typeof activator.clientY === "number" && overRect) {
-          const cursorY = activator.clientY + event.delta.y;
-          const overMid = overRect.top + overRect.height / 2;
-          side = cursorY < overMid ? "above" : "below";
-        }
-        insertIdx = side === "below" ? overIdx + 1 : overIdx;
-      }
-    }
-
-    const before = targetCards[insertIdx - 1];
-    const after = targetCards[insertIdx];
-    let finalPosition: number;
-    if (!before && after) finalPosition = after.position - 1;
-    else if (before && !after) finalPosition = before.position + 1;
-    else if (before && after) {
-      const gap = after.position - before.position;
-      finalPosition =
-        gap > 0 ? before.position + gap / 2 : before.position + 0.5;
-    } else finalPosition = 1;
+    const overCardId =
+      overData?.type === "card" && overId !== activeId ? overId : null;
+    const side = sideFromCursor(event, overCardId);
+    const insertIdx = computeDropInsertIdx(targetCards, overCardId, side);
+    const finalPosition = computeDropPosition(targetCards, insertIdx);
 
     // Skip persistence when the drop lands at the original spot.
     if (
