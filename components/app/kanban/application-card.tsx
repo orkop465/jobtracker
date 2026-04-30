@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { KanbanApplication } from "@/lib/board/types";
@@ -43,6 +44,10 @@ export function ApplicationCard({
   isOverlay,
   overlaySelectionCount,
 }: ApplicationCardProps) {
+  const sortableData = useMemo(
+    () => ({ columnId, type: "card" as const }),
+    [columnId],
+  );
   const {
     attributes,
     listeners,
@@ -52,7 +57,7 @@ export function ApplicationCard({
     isDragging,
   } = useSortable({
     id: app.id,
-    data: { columnId, type: "card" },
+    data: sortableData,
     disabled: isOverlay,
   });
 
