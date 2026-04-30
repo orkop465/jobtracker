@@ -11,7 +11,9 @@ import {
   useSensors,
   type DragEndEvent,
   type DragOverEvent,
+  type DragMoveEvent,
   type DragStartEvent,
+  MeasuringStrategy,
 } from "@dnd-kit/core";
 import { useToast } from "@/components/ui/toast";
 import type { BoardColumnType, KanbanApplication } from "@/lib/board/types";
@@ -33,6 +35,15 @@ import { CardDetailPanel } from "./card-detail-panel";
 import { ColumnManager } from "./column-manager";
 
 const TWEAKS_KEY = "maakavoda:board:tweaks";
+
+// Measure droppables once at drag-start instead of continuously during
+// the drag. Default ("WhileDragging") tries to re-measure on every
+// collision check, which combined with our dropPreview state updates
+// caused dnd-kit's internal useScrollOffsets effect to fire setState
+// repeatedly → "Maximum update depth exceeded".
+const MEASURING_CONFIG = {
+  droppable: { strategy: MeasuringStrategy.BeforeDragging },
+};
 
 interface DashboardMeta {
   responseRate: number | null;
@@ -215,18 +226,30 @@ export function KanbanBoard() {
     return out;
   }, [apps]);
 
+  // Memoize per-column app lists. Without this, getColumnApps returns a
+  // fresh array each render → BoardColumn sees a new `apps` prop ref each
+  // time → SortableContext.items changes ref → dnd-kit's measure cycle
+  // re-fires onDragOver, which triggers another re-render, which is the
+  // "Maximum update depth" loop. Memoizing on (columns, visibleApps)
+  // gives a stable reference per column when nothing has actually moved.
+  const colAppsByCol = useMemo(() => {
+    const map = new Map<string, KanbanApplication[]>();
+    for (const col of columns) {
+      const filtered = visibleApps.filter((a) => {
+        if (a.boardColumnId) return a.boardColumnId === col.id;
+        return col.mappedStatus === a.status;
+      });
+      filtered.sort((a, b) => {
+        if (a.position !== b.position) return a.position - b.position;
+        return new Date(a.appliedAt).getTime() - new Date(b.appliedAt).getTime();
+      });
+      map.set(col.id, filtered);
+    }
+    return map;
+  }, [columns, visibleApps]);
+
   function getColumnApps(columnId: string): KanbanApplication[] {
-    const col = columns.find((c) => c.id === columnId);
-    const filtered = visibleApps.filter((a) => {
-      if (a.boardColumnId) return a.boardColumnId === columnId;
-      return col?.mappedStatus === a.status;
-    });
-    // Stable sort: position asc, then appliedAt asc as tiebreaker for cards
-    // that share a position (e.g. before any reorder happens).
-    return filtered.slice().sort((a, b) => {
-      if (a.position !== b.position) return a.position - b.position;
-      return new Date(a.appliedAt).getTime() - new Date(b.appliedAt).getTime();
-    });
+    return colAppsByCol.get(columnId) ?? [];
   }
 
   // ── Selection ──────────────────────────────────────────────
@@ -446,7 +469,7 @@ export function KanbanBoard() {
   // a dimmed ApplicationCard at that slot; the dragging card itself is
   // filtered out of the source column's display so the layout collapses
   // around it. Persistence happens once on drop.
-  function handleDragOver(event: DragOverEvent) {
+  function handleDragMove(event: DragMoveEvent | DragOverEvent) {
     const { active, over } = event;
     if (!over) {
       setDropPreview(null);
@@ -504,7 +527,7 @@ export function KanbanBoard() {
   }
 
   function sideFromCursor(
-    event: DragOverEvent | DragEndEvent,
+    event: DragMoveEvent | DragOverEvent | DragEndEvent,
     overCardId: string | null,
   ): "above" | "below" {
     if (!overCardId || !event.over) return "above";
@@ -807,8 +830,10 @@ export function KanbanBoard() {
           <DndContext
             sensors={sensors}
             collisionDetection={closestCorners}
+            measuring={MEASURING_CONFIG}
             onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
+            onDragMove={handleDragMove}
+            onDragOver={handleDragMove}
             onDragEnd={handleDragEnd}
           >
             <div className="board-scroll">
