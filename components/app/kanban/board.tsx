@@ -13,6 +13,7 @@ import {
   type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
+import { arrayMove } from "@dnd-kit/sortable";
 import { useToast } from "@/components/ui/toast";
 import type { BoardColumnType, KanbanApplication } from "@/lib/board/types";
 import {
@@ -89,10 +90,10 @@ export function KanbanBoard() {
   );
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [overInfo, setOverInfo] = useState<{
-    id: string;
-    side: "above" | "below";
-  } | null>(null);
+  // Snapshot of dragging card's pre-drag state — used to restore if the
+  // drag is canceled (dropped into nowhere). dragOver mutates apps live
+  // so cards visibly shift across columns during the drag.
+  const dragOriginalRef = useRef<KanbanApplication | null>(null);
 
   const initialFetchRef = useRef(false);
 
@@ -251,13 +252,6 @@ export function KanbanBoard() {
     }
   }
 
-  // Move cards to a column without specifying a drop position (used by
-  // bulk-bar Move-to and ctx-menu Move-to). Delegates to dropCards with
-  // overCardId=null so they append to the bottom.
-  async function moveCardsToColumn(ids: string[], targetColumnId: string) {
-    await dropCards(ids, targetColumnId, null);
-  }
-
   async function snoozeApp(id: string) {
     const dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     setApps((prev) =>
@@ -358,7 +352,7 @@ export function KanbanBoard() {
   // ── Bulk handlers ──────────────────────────────────────────
   function bulkMove(columnId: string) {
     if (selected.size === 0) return;
-    moveCardsToColumn([...selected], columnId);
+    moveCardsToColumnBottom([...selected], columnId);
     clearSelection();
   }
 
@@ -411,128 +405,301 @@ export function KanbanBoard() {
   const overlayCard = draggingId ? apps.find((a) => a.id === draggingId) ?? null : null;
   const overlayCount = overlayCard && selected.has(overlayCard.id) ? selected.size : 1;
 
+  // Cards in `targetColumnId` (excluding any in `excludeIds`) sorted by
+  // position then appliedAt. Used both for live preview during drag and
+  // for the final persist on drop.
+  function cardsInColumn(
+    targetColumnId: string,
+    excludeIds: Set<string> = new Set(),
+  ): KanbanApplication[] {
+    const targetCol = columns.find((c) => c.id === targetColumnId);
+    return apps
+      .filter(
+        (a) =>
+          !excludeIds.has(a.id) &&
+          (a.boardColumnId === targetColumnId ||
+            (!a.boardColumnId && targetCol?.mappedStatus === a.status)),
+      )
+      .slice()
+      .sort((a, b) => {
+        if (a.position !== b.position) return a.position - b.position;
+        return new Date(a.appliedAt).getTime() - new Date(b.appliedAt).getTime();
+      });
+  }
+
   function handleDragStart(event: DragStartEvent) {
-    setDraggingId(event.active.id as string);
-    setOverInfo(null);
+    const id = String(event.active.id);
+    setDraggingId(id);
+    const original = apps.find((a) => a.id === id);
+    dragOriginalRef.current = original ? { ...original } : null;
   }
 
-  function computeSide(event: DragOverEvent | DragEndEvent): "above" | "below" {
-    const activeRect = event.active.rect.current.translated;
-    const overRect = event.over?.rect;
-    if (!activeRect || !overRect) return "above";
-    const activeMid = activeRect.top + activeRect.height / 2;
-    const overMid = overRect.top + overRect.height / 2;
-    return activeMid < overMid ? "above" : "below";
-  }
-
+  // Live mutation only for cross-column drags. Same-column reorder is left
+  // to dnd-kit's verticalListSortingStrategy, which animates the preview
+  // via CSS transforms — no state mutation needed (and crucially: avoids
+  // the position-flip oscillation that comes from re-mutating each event).
   function handleDragOver(event: DragOverEvent) {
-    const over = event.over;
-    if (!over) {
-      setOverInfo(null);
-      return;
-    }
-    const overData = over.data.current as { type?: string } | undefined;
-    if (overData?.type === "card") {
-      setOverInfo({ id: String(over.id), side: computeSide(event) });
-    } else {
-      setOverInfo({ id: String(over.id), side: "below" });
-    }
-  }
-
-  async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    const finalSide = over ? computeSide(event) : "above";
-    setDraggingId(null);
-    setOverInfo(null);
     if (!over) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    if (activeId === overId) return;
 
     const overData = over.data.current as
       | { columnId?: string; type?: string }
       | undefined;
     let targetColumnId: string | null = null;
-    let overCardId: string | null = null;
-    if (overData?.type === "column") {
+    if (overData?.type === "card") {
       targetColumnId = overData.columnId ?? null;
-    } else if (overData?.type === "card" && overData.columnId) {
-      targetColumnId = overData.columnId;
-      overCardId = String(over.id);
-    } else if (columns.some((c) => c.id === over.id)) {
-      targetColumnId = String(over.id);
-    } else {
-      const overApp = apps.find((a) => a.id === over.id);
-      if (overApp?.boardColumnId) {
-        targetColumnId = overApp.boardColumnId;
-        overCardId = overApp.id;
-      }
+    } else if (overData?.type === "column") {
+      targetColumnId = overData.columnId ?? overId;
+    } else if (columns.some((c) => c.id === overId)) {
+      targetColumnId = overId;
     }
     if (!targetColumnId) return;
 
-    const draggingAppId = String(active.id);
-    const draggingApp = apps.find((a) => a.id === draggingAppId);
-    if (!draggingApp) return;
+    const targetCol = columns.find((c) => c.id === targetColumnId);
+    if (!targetCol) return;
 
-    const movingIds =
-      selected.has(draggingAppId) && selected.size > 1
-        ? [...selected]
-        : [draggingAppId];
+    setApps((prev) => {
+      const activeApp = prev.find((a) => a.id === activeId);
+      if (!activeApp) return prev;
 
-    // No-op: dropped on self (same column, single card, hovering itself).
-    if (
-      movingIds.length === 1 &&
-      overCardId === draggingAppId &&
-      draggingApp.boardColumnId === targetColumnId
-    ) {
+      const sourceColumnId =
+        activeApp.boardColumnId ??
+        columns.find((c) => c.mappedStatus === activeApp.status)?.id ??
+        null;
+      // Same-column: don't mutate. dnd-kit handles preview animation.
+      if (sourceColumnId === targetColumnId) return prev;
+
+      // Cross-column: insert active into target column at the right slot
+      // so the card visibly appears in the target while dragging.
+      const targetCards = prev
+        .filter(
+          (a) =>
+            a.id !== activeId &&
+            (a.boardColumnId === targetColumnId ||
+              (!a.boardColumnId && targetCol.mappedStatus === a.status)),
+        )
+        .slice()
+        .sort((a, b) => {
+          if (a.position !== b.position) return a.position - b.position;
+          return new Date(a.appliedAt).getTime() - new Date(b.appliedAt).getTime();
+        });
+
+      let insertIdx = targetCards.length;
+      if (overData?.type === "card") {
+        const overIdx = targetCards.findIndex((a) => a.id === overId);
+        if (overIdx !== -1) {
+          const activeRect = active.rect.current.translated;
+          const overRect = over.rect;
+          if (activeRect && overRect) {
+            const activeMid = activeRect.top + activeRect.height / 2;
+            const overMid = overRect.top + overRect.height / 2;
+            insertIdx = activeMid < overMid ? overIdx : overIdx + 1;
+          } else {
+            insertIdx = overIdx;
+          }
+        }
+      }
+
+      const before = targetCards[insertIdx - 1];
+      const after = targetCards[insertIdx];
+      let newPos: number;
+      if (!before && after) newPos = after.position - 1;
+      else if (before && !after) newPos = before.position + 1;
+      else if (before && after) {
+        const gap = after.position - before.position;
+        newPos = gap > 0 ? before.position + gap / 2 : before.position + 0.5;
+      } else newPos = 1;
+
+      if (
+        activeApp.boardColumnId === targetColumnId &&
+        activeApp.position === newPos
+      ) {
+        return prev;
+      }
+
+      return prev.map((a) =>
+        a.id === activeId
+          ? {
+              ...a,
+              boardColumnId: targetColumnId,
+              status: targetCol.mappedStatus ?? a.status,
+              position: newPos,
+            }
+          : a,
+      );
+    });
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    setDraggingId(null);
+
+    const activeId = String(active.id);
+    const original = dragOriginalRef.current;
+    dragOriginalRef.current = null;
+
+    // Drop into nowhere → restore the dragging card to its pre-drag state.
+    if (!over) {
+      if (original) {
+        setApps((prev) => prev.map((a) => (a.id === activeId ? original : a)));
+      }
       return;
     }
 
-    await dropCards(movingIds, targetColumnId, overCardId, finalSide);
+    const overId = String(over.id);
+    const overData = over.data.current as
+      | { columnId?: string; type?: string }
+      | undefined;
+
+    // Resolve final target column. Same-column reorders never mutated apps,
+    // so we read activeApp's pre-drag column from `original`.
+    let targetColumnId: string | null = null;
+    if (overData?.type === "card") targetColumnId = overData.columnId ?? null;
+    else if (overData?.type === "column") {
+      targetColumnId = overData.columnId ?? overId;
+    } else if (columns.some((c) => c.id === overId)) {
+      targetColumnId = overId;
+    }
+    if (!targetColumnId) {
+      const fallback = original?.boardColumnId
+        ?? columns.find((c) => c.mappedStatus === original?.status)?.id
+        ?? null;
+      targetColumnId = fallback;
+    }
+    if (!targetColumnId) return;
+    const targetCol = columns.find((c) => c.id === targetColumnId);
+    if (!targetCol) return;
+
+    const sourceColumnId =
+      original?.boardColumnId ??
+      columns.find((c) => c.mappedStatus === original?.status)?.id ??
+      null;
+    const sameColumn = sourceColumnId === targetColumnId;
+
+    let finalPosition: number;
+    if (sameColumn && overData?.type === "card" && overId !== activeId) {
+      // Same-column reorder. Use arrayMove on the current order to
+      // determine final placement, then derive a fractional position
+      // between the new neighbors.
+      const colCards = cardsInColumn(targetColumnId);
+      const oldIdx = colCards.findIndex((c) => c.id === activeId);
+      const newIdx = colCards.findIndex((c) => c.id === overId);
+      if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return;
+      const reordered = arrayMove(colCards, oldIdx, newIdx);
+      const at = reordered.findIndex((c) => c.id === activeId);
+      const before = reordered[at - 1];
+      const after = reordered[at + 1];
+      if (!before && after) finalPosition = after.position - 1;
+      else if (before && !after) finalPosition = before.position + 1;
+      else if (before && after) {
+        const gap = after.position - before.position;
+        finalPosition =
+          gap > 0 ? before.position + gap / 2 : before.position + 0.5;
+      } else finalPosition = 1;
+
+      setApps((prev) =>
+        prev.map((a) =>
+          a.id === activeId ? { ...a, position: finalPosition } : a,
+        ),
+      );
+    } else {
+      // Cross-column: handleDragOver already mutated state. Read it.
+      const finalApp = apps.find((a) => a.id === activeId);
+      if (!finalApp) return;
+
+      // No real change vs. original — skip persistence.
+      if (
+        original &&
+        original.boardColumnId === finalApp.boardColumnId &&
+        original.position === finalApp.position &&
+        original.status === finalApp.status
+      ) {
+        return;
+      }
+      finalPosition = finalApp.position;
+    }
+
+    // Multi-select: pack the rest of the selection in positions just after
+    // the active card.
+    const others =
+      selected.has(activeId) && selected.size > 1
+        ? [...selected].filter((id) => id !== activeId)
+        : [];
+
+    let extraPatches: Array<{ id: string; position: number }> = [];
+    if (others.length > 0) {
+      const targetCards = cardsInColumn(
+        targetColumnId,
+        new Set([activeId, ...others]),
+      );
+      const idx = targetCards.findIndex((c) => c.position > finalPosition);
+      const after = idx !== -1 ? targetCards[idx] : null;
+      const span = others.length;
+      const positions: number[] = [];
+      if (!after) {
+        for (let i = 0; i < span; i++) positions.push(finalPosition + (i + 1));
+      } else {
+        const gap = after.position - finalPosition;
+        const step = gap > 0 ? gap / (span + 1) : 0.5;
+        for (let i = 0; i < span; i++) positions.push(finalPosition + step * (i + 1));
+      }
+      extraPatches = others.map((id, i) => ({ id, position: positions[i] }));
+
+      setApps((prev) =>
+        prev.map((a) => {
+          const ep = extraPatches.find((p) => p.id === a.id);
+          if (!ep) return a;
+          return {
+            ...a,
+            boardColumnId: targetColumnId,
+            status: targetCol.mappedStatus ?? a.status,
+            position: ep.position,
+          };
+        }),
+      );
+    }
+
+    const allPatches: Array<{ id: string; position: number }> = [
+      { id: activeId, position: finalPosition },
+      ...extraPatches,
+    ];
+
+    const results = await Promise.all(
+      allPatches.map(({ id, position }) => {
+        const body: Record<string, unknown> = {
+          boardColumnId: targetColumnId,
+          position,
+        };
+        if (targetCol.mappedStatus) body.status = targetCol.mappedStatus;
+        return patchApp(id, body);
+      }),
+    );
+
     if (selected.size > 1) clearSelection();
+
+    if (results.some((r) => !r)) {
+      toast("Some moves failed — refreshing", "error");
+      loadBoard();
+    } else {
+      loadMeta();
+    }
   }
 
-  // Unified drop. Computes a fractional `position` for each moving card
-  // such that they land at the drop indicator's location, accounting for
-  // which side of the over-card the cursor was on (above/below).
-  async function dropCards(
-    ids: string[],
-    targetColumnId: string,
-    overCardId: string | null,
-    side: "above" | "below" = "above",
-  ) {
+  // Used by bulk-bar Move-to and ctx-menu Move-to (no source position info,
+  // just append cards to the bottom of the target column).
+  async function moveCardsToColumnBottom(ids: string[], targetColumnId: string) {
     const targetCol = columns.find((c) => c.id === targetColumnId);
     if (!targetCol) return;
 
     const movingSet = new Set(ids);
-    const colCards = getColumnApps(targetColumnId).filter(
-      (c) => !movingSet.has(c.id),
-    );
+    const colCards = cardsInColumn(targetColumnId, movingSet);
+    const last = colCards[colCards.length - 1];
+    const startPos = last ? last.position + 1 : 1;
+    const positions = ids.map((_, i) => startPos + i);
 
-    let insertAt = colCards.length;
-    if (overCardId) {
-      const idx = colCards.findIndex((c) => c.id === overCardId);
-      if (idx !== -1) insertAt = side === "below" ? idx + 1 : idx;
-    }
-
-    const before = colCards[insertAt - 1];
-    const after = colCards[insertAt];
-
-    const span = ids.length;
-    let positions: number[];
-    if (!before && after) {
-      // Insert above first card: positions = [after.pos - span, ..., after.pos - 1]
-      positions = ids.map((_, i) => after.position - (span - i));
-    } else if (before && !after) {
-      positions = ids.map((_, i) => before.position + i + 1);
-    } else if (before && after) {
-      const gap = after.position - before.position;
-      // Degenerate gap (equal positions): fall back to monotonic offsets;
-      // server-side ordering will still tiebreak by appliedAt.
-      const step = gap > 0 ? gap / (span + 1) : 0.5;
-      positions = ids.map((_, i) => before.position + step * (i + 1));
-    } else {
-      positions = ids.map((_, i) => i + 1);
-    }
-
-    // Optimistic local update
     setApps((prev) =>
       prev.map((a) => {
         const i = ids.indexOf(a.id);
@@ -546,7 +713,6 @@ export function KanbanBoard() {
       }),
     );
 
-    // Persist
     const results = await Promise.all(
       ids.map((id, i) => {
         const body: Record<string, unknown> = {
@@ -685,8 +851,6 @@ export function KanbanBoard() {
                     cardStyle={tweaks.cardStyle}
                     selected={selected}
                     addingHere={addingTo === col.id}
-                    draggingId={draggingId}
-                    overInfo={overInfo}
                     onSelect={toggleSelect}
                     onPeek={(a) => setDetailApp(a)}
                     onContextMenu={(e, card) =>
@@ -728,7 +892,7 @@ export function KanbanBoard() {
           columns={columns}
           onClose={() => setCtxMenu(null)}
           onMove={(columnId) => {
-            moveCardsToColumn([ctxMenu.card.id], columnId);
+            moveCardsToColumnBottom([ctxMenu.card.id], columnId);
             setCtxMenu(null);
           }}
           onSnooze={() => {
