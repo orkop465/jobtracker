@@ -274,11 +274,16 @@
   box-shadow: var(--shadow-md);
 }
 .bcard:active { cursor: grabbing; }
-/* Dragging card stays mounted (so dnd-kit keeps tracking it) but is
-   removed from the layout so its source slot collapses. The dimmed
-   ghost is rendered at the projected drop slot. */
+/* Dragging card is invisible at its source slot but still takes space.
+   We can't use display:none — dnd-kit's measuring strategy re-reads
+   the active element's rect during the drag, and a (0,0,0,0) rect
+   would push the DragOverlay to the top-left corner of the viewport.
+   Keeping the slot reserved with opacity:0 is the cheapest reliable
+   fix. The dimmed ghost preview is rendered at the projected drop
+   slot via the layout list, separately from this placeholder. */
 .bcard.is-dragging {
-  display: none !important;
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* Ghost preview — dimmed placeholder rendered at the projected drop
