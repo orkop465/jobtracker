@@ -274,27 +274,14 @@
   box-shadow: var(--shadow-md);
 }
 .bcard:active { cursor: grabbing; }
-/* Dragging card is invisible at its source slot but still takes space.
-   We can't use display:none — dnd-kit's measuring strategy re-reads
-   the active element's rect during the drag, and a (0,0,0,0) rect
-   would push the DragOverlay to the top-left corner of the viewport.
-   Keeping the slot reserved with opacity:0 is the cheapest reliable
-   fix. The dimmed ghost preview is rendered at the projected drop
-   slot via the layout list, separately from this placeholder. */
+/* Dragging card stays visible as a faded ghost at its source slot.
+   verticalListSortingStrategy shifts the neighbor cards to make room
+   for the predicted drop slot — the gap that opens up shows where the
+   card will land. The DragOverlay renders the moving card at full
+   opacity at the cursor. */
 .bcard.is-dragging {
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* Ghost preview — dimmed placeholder rendered at the projected drop
-   slot. As the cursor moves, the ghost moves with it so the user sees
-   exactly where the card will land on release. */
-.bcard-ghost-wrap {
   opacity: 0.4;
   pointer-events: none;
-}
-.bcard-ghost-wrap .bcard {
-  filter: saturate(0.6);
 }
 .bcard.is-selected {
   border-color: var(--accent);

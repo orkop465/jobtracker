@@ -11,7 +11,6 @@ import {
   useSensors,
   type DragEndEvent,
   type DragOverEvent,
-  type DragMoveEvent,
   type DragStartEvent,
   MeasuringStrategy,
 } from "@dnd-kit/core";
@@ -102,12 +101,6 @@ export function KanbanBoard() {
   );
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  // Where the dimmed ghost preview should be inserted while dragging.
-  // idx is the position in the target column's *non-dragging* list.
-  const [dropPreview, setDropPreview] = useState<{
-    columnId: string;
-    idx: number;
-  } | null>(null);
   // Pre-drag snapshot — used to restore state on cancel and to detect
   // no-op drops (released at original position).
   const dragOriginalRef = useRef<KanbanApplication | null>(null);
@@ -459,24 +452,22 @@ export function KanbanBoard() {
   function handleDragStart(event: DragStartEvent) {
     const id = String(event.active.id);
     setDraggingId(id);
-    setDropPreview(null);
     const original = apps.find((a) => a.id === id);
     dragOriginalRef.current = original ? { ...original } : null;
   }
 
-  // No state mutation during drag. We just compute where the ghost
-  // preview should go and store it in `dropPreview`. BoardColumn renders
-  // a dimmed ApplicationCard at that slot; the dragging card itself is
-  // filtered out of the source column's display so the layout collapses
-  // around it. Persistence happens once on drop.
-  function handleDragMove(event: DragMoveEvent | DragOverEvent) {
+  // dnd-kit canonical kanban pattern: state mutation in dragOver only when
+  // the active card crosses a column boundary. Same-column reorder is
+  // visualized by verticalListSortingStrategy (CSS transforms on neighbor
+  // cards) and finalized in dragEnd. This pattern is what dnd-kit's
+  // multi-container example uses; deviating from it (per-event mutation,
+  // separate dropPreview state) trips React's update budget.
+  function handleDragOver(event: DragOverEvent) {
     const { active, over } = event;
-    if (!over) {
-      setDropPreview(null);
-      return;
-    }
+    if (!over) return;
     const activeId = String(active.id);
     const overId = String(over.id);
+    if (activeId === overId) return;
 
     const overData = over.data.current as
       | { columnId?: string; type?: string }
@@ -485,49 +476,58 @@ export function KanbanBoard() {
     let overCardId: string | null = null;
     if (overData?.type === "card") {
       targetColumnId = overData.columnId ?? null;
-      overCardId = overId === activeId ? null : overId;
+      overCardId = overId;
     } else if (overData?.type === "column") {
       targetColumnId = overData.columnId ?? overId;
     } else if (columns.some((c) => c.id === overId)) {
       targetColumnId = overId;
     }
-    if (!targetColumnId) {
-      setDropPreview(null);
-      return;
-    }
+    if (!targetColumnId) return;
+
     const targetCol = columns.find((c) => c.id === targetColumnId);
     if (!targetCol) return;
 
-    const targetCards = apps
-      .filter(
-        (a) =>
-          a.id !== activeId &&
-          (a.boardColumnId === targetColumnId ||
-            (!a.boardColumnId && targetCol.mappedStatus === a.status)),
-      )
-      .slice()
-      .sort((a, b) => {
-        if (a.position !== b.position) return a.position - b.position;
-        return new Date(a.appliedAt).getTime() - new Date(b.appliedAt).getTime();
-      });
+    setApps((prev) => {
+      const activeApp = prev.find((a) => a.id === activeId);
+      if (!activeApp) return prev;
+      const sourceColumnId =
+        activeApp.boardColumnId ??
+        columns.find((c) => c.mappedStatus === activeApp.status)?.id ??
+        null;
+      if (sourceColumnId === targetColumnId) return prev;
 
-    const side = sideFromCursor(event, overCardId);
-    const insertIdx = computeDropInsertIdx(targetCards, overCardId, side);
+      const targetCards = prev
+        .filter(
+          (a) =>
+            a.id !== activeId &&
+            (a.boardColumnId === targetColumnId ||
+              (!a.boardColumnId && targetCol.mappedStatus === a.status)),
+        )
+        .slice()
+        .sort((a, b) => {
+          if (a.position !== b.position) return a.position - b.position;
+          return new Date(a.appliedAt).getTime() - new Date(b.appliedAt).getTime();
+        });
 
-    setDropPreview((prev) => {
-      if (
-        prev &&
-        prev.columnId === targetColumnId &&
-        prev.idx === insertIdx
-      ) {
-        return prev;
-      }
-      return { columnId: targetColumnId, idx: insertIdx };
+      const side = sideFromCursor(event, overCardId);
+      const insertIdx = computeDropInsertIdx(targetCards, overCardId, side);
+      const newPos = computeDropPosition(targetCards, insertIdx);
+
+      return prev.map((a) =>
+        a.id === activeId
+          ? {
+              ...a,
+              boardColumnId: targetColumnId,
+              status: targetCol.mappedStatus ?? a.status,
+              position: newPos,
+            }
+          : a,
+      );
     });
   }
 
   function sideFromCursor(
-    event: DragMoveEvent | DragOverEvent | DragEndEvent,
+    event: DragOverEvent | DragEndEvent,
     overCardId: string | null,
   ): "above" | "below" {
     if (!overCardId || !event.over) return "above";
@@ -548,7 +548,6 @@ export function KanbanBoard() {
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setDraggingId(null);
-    setDropPreview(null);
 
     const activeId = String(active.id);
     const original = dragOriginalRef.current;
@@ -832,8 +831,7 @@ export function KanbanBoard() {
             collisionDetection={closestCorners}
             measuring={MEASURING_CONFIG}
             onDragStart={handleDragStart}
-            onDragMove={handleDragMove}
-            onDragOver={handleDragMove}
+            onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
           >
             <div className="board-scroll">
@@ -847,9 +845,6 @@ export function KanbanBoard() {
                     cardStyle={tweaks.cardStyle}
                     selected={selected}
                     addingHere={addingTo === col.id}
-                    draggingId={draggingId}
-                    draggingApp={overlayCard}
-                    dropPreview={dropPreview}
                     onSelect={toggleSelect}
                     onPeek={(a) => setDetailApp(a)}
                     onContextMenu={(e, card) =>
