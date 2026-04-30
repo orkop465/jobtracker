@@ -14,12 +14,35 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (!column) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = await req.json().catch(() => null);
-  const name = (body?.name ?? "").trim();
-  if (!name || name.length > 60) {
-    return NextResponse.json({ error: "Name is required (max 60 chars)" }, { status: 400 });
+  const data: { name?: string; color?: string | null } = {};
+
+  if (body && typeof body === "object" && "name" in body) {
+    const name = String(body.name ?? "").trim();
+    if (!name || name.length > 60) {
+      return NextResponse.json(
+        { error: "Name is required (max 60 chars)" },
+        { status: 400 },
+      );
+    }
+    data.name = name;
   }
 
-  const updated = await prisma.boardColumn.update({ where: { id }, data: { name } });
+  if (body && typeof body === "object" && "color" in body) {
+    const raw = body.color;
+    if (raw === null || raw === "") {
+      data.color = null;
+    } else if (typeof raw === "string" && raw.length <= 60) {
+      data.color = raw;
+    } else {
+      return NextResponse.json({ error: "Invalid color" }, { status: 400 });
+    }
+  }
+
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  }
+
+  const updated = await prisma.boardColumn.update({ where: { id }, data });
 
   return NextResponse.json({
     column: {
@@ -27,6 +50,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
       name: updated.name,
       position: updated.position,
       mappedStatus: updated.mappedStatus,
+      color: updated.color,
     },
   });
 }

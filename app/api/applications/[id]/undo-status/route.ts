@@ -61,12 +61,24 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
 
       const newStatus = prev ? prev.toStatus : last.fromStatus;
 
+      // Find a column matching the restored status so the card visually
+      // returns to the right column. If none exists, leave boardColumnId
+      // alone (the client falls back to mappedStatus rendering).
+      const targetCol = await tx.boardColumn.findFirst({
+        where: { userId, mappedStatus: newStatus },
+      });
+
+      const updateData: { status: typeof newStatus; boardColumnId?: string } = {
+        status: newStatus,
+      };
+      if (targetCol) updateData.boardColumnId = targetCol.id;
+
       // Conditional status reset: the application must still be in the
       // status that was set by the event we just voided. If it's not, a
       // concurrent PATCH already changed it and we should not clobber.
       const restored = await tx.application.updateMany({
         where: { id: appId, userId, status: last.toStatus },
-        data: { status: newStatus },
+        data: updateData,
       });
       if (restored.count !== 1) {
         return { ok: false as const, error: "Conflict — please retry" };
