@@ -1,17 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext } from "@dnd-kit/sortable";
 import type { SortingStrategy } from "@dnd-kit/sortable";
-
-// No-op sorting strategy: cards stay in place during drag. The drop
-// location is decided from cursor position vs the over-card on release,
-// not from auto-shifted neighbors. Avoids the over=column edge case
-// where a strategy-shifted neighbor leaves a "no card here" gap that
-// dnd-kit reports as the column droppable, which then defaults to
-// append-at-end and silently no-ops the user's intended swap.
-const noopStrategy: SortingStrategy = () => null;
 import type { BoardColumnType, KanbanApplication } from "@/lib/board/types";
 import { ApplicationCard } from "./application-card";
 import { InlineAddForm } from "./inline-add-form";
@@ -23,6 +15,8 @@ import {
 } from "@/lib/board/stage-meta";
 import type { CardStyle, Density } from "./tweaks-panel";
 
+const noopStrategy: SortingStrategy = () => null;
+
 interface BoardColumnProps {
   column: BoardColumnType;
   apps: KanbanApplication[];
@@ -30,6 +24,9 @@ interface BoardColumnProps {
   cardStyle: CardStyle;
   selected: Set<string>;
   addingHere: boolean;
+  draggingId: string | null;
+  draggingApp: KanbanApplication | null;
+  dropPreview: { columnId: string; idx: number } | null;
   onSelect: (id: string) => void;
   onPeek: (app: KanbanApplication) => void;
   onContextMenu: (e: React.MouseEvent, app: KanbanApplication) => void;
@@ -45,6 +42,9 @@ export function BoardColumn({
   cardStyle,
   selected,
   addingHere,
+  draggingId,
+  draggingApp,
+  dropPreview,
   onSelect,
   onPeek,
   onContextMenu,
@@ -61,7 +61,12 @@ export function BoardColumn({
     data: droppableData,
   });
 
+  // The dragging card stays mounted (dnd-kit needs it registered) but
+  // is hidden via CSS (.bcard.is-dragging => display: none) so its slot
+  // collapses. The dimmed ghost is inserted into the non-dragging slot
+  // sequence at the projected drop index.
   const itemIds = useMemo(() => apps.map((a) => a.id), [apps]);
+
   const stalledCount = apps.filter((a) => isStalled(a.status, a.updatedAt)).length;
   const avgDays = apps.length
     ? Math.round(
@@ -69,6 +74,9 @@ export function BoardColumn({
           apps.length,
       )
     : 0;
+
+  const showPreviewHere = dropPreview?.columnId === column.id && !!draggingApp;
+  const previewIdx = showPreviewHere ? dropPreview!.idx : -1;
 
   return (
     <div
@@ -126,7 +134,7 @@ export function BoardColumn({
           />
         )}
 
-        {apps.length === 0 && !addingHere && (
+        {apps.length === 0 && !addingHere && !showPreviewHere && (
           <div className="board-col-ghost">
             <svg
               className="board-col-ghost-icon"
@@ -157,21 +165,77 @@ export function BoardColumn({
         )}
 
         <SortableContext items={itemIds} strategy={noopStrategy}>
-          {apps.map((app) => (
-            <ApplicationCard
-              key={app.id}
-              app={app}
-              columnId={column.id}
-              density={density}
-              cardStyle={cardStyle}
-              selected={selected.has(app.id)}
-              onSelect={onSelect}
-              onPeek={onPeek}
-              onContextMenu={onContextMenu}
-            />
-          ))}
+          {(() => {
+            const out: React.ReactNode[] = [];
+            let nonDraggingI = 0;
+            for (const app of apps) {
+              if (app.id !== draggingId) {
+                if (showPreviewHere && previewIdx === nonDraggingI && draggingApp) {
+                  out.push(
+                    <GhostPreview
+                      key={`ghost-${nonDraggingI}`}
+                      app={draggingApp}
+                      density={density}
+                      cardStyle={cardStyle}
+                    />,
+                  );
+                }
+                nonDraggingI += 1;
+              }
+              out.push(
+                <ApplicationCard
+                  key={app.id}
+                  app={app}
+                  columnId={column.id}
+                  density={density}
+                  cardStyle={cardStyle}
+                  selected={selected.has(app.id)}
+                  onSelect={onSelect}
+                  onPeek={onPeek}
+                  onContextMenu={onContextMenu}
+                />,
+              );
+            }
+            if (showPreviewHere && previewIdx === nonDraggingI && draggingApp) {
+              out.push(
+                <GhostPreview
+                  key="ghost-end"
+                  app={draggingApp}
+                  density={density}
+                  cardStyle={cardStyle}
+                />,
+              );
+            }
+            return out;
+          })()}
         </SortableContext>
       </div>
+    </div>
+  );
+}
+
+function GhostPreview({
+  app,
+  density,
+  cardStyle,
+}: {
+  app: KanbanApplication;
+  density: Density;
+  cardStyle: CardStyle;
+}) {
+  return (
+    <div className="bcard-ghost-wrap">
+      <ApplicationCard
+        app={app}
+        columnId=""
+        density={density}
+        cardStyle={cardStyle}
+        selected={false}
+        onSelect={() => {}}
+        onPeek={() => {}}
+        onContextMenu={() => {}}
+        isOverlay
+      />
     </div>
   );
 }

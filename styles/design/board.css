@@ -274,12 +274,22 @@
   box-shadow: var(--shadow-md);
 }
 .bcard:active { cursor: grabbing; }
-/* In-place ghost during drag — translucent placeholder at the card's
-   original slot. The DragOverlay shows the moving card at the cursor;
-   this dimmed copy stays where the card came from. */
+/* Dragging card stays mounted (so dnd-kit keeps tracking it) but is
+   removed from the layout so its source slot collapses. The dimmed
+   ghost is rendered at the projected drop slot. */
 .bcard.is-dragging {
+  display: none !important;
+}
+
+/* Ghost preview — dimmed placeholder rendered at the projected drop
+   slot. As the cursor moves, the ghost moves with it so the user sees
+   exactly where the card will land on release. */
+.bcard-ghost-wrap {
   opacity: 0.4;
   pointer-events: none;
+}
+.bcard-ghost-wrap .bcard {
+  filter: saturate(0.6);
 }
 .bcard.is-selected {
   border-color: var(--accent);

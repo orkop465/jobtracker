@@ -89,9 +89,14 @@ export function KanbanBoard() {
   );
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  // Snapshot of the dragging card's pre-drag state, for restoring if the
-  // drag is canceled (released over nothing). Live mutation in handleDragOver
-  // walks the card around target columns/positions during the drag.
+  // Where the dimmed ghost preview should be inserted while dragging.
+  // idx is the position in the target column's *non-dragging* list.
+  const [dropPreview, setDropPreview] = useState<{
+    columnId: string;
+    idx: number;
+  } | null>(null);
+  // Pre-drag snapshot — used to restore state on cancel and to detect
+  // no-op drops (released at original position).
   const dragOriginalRef = useRef<KanbanApplication | null>(null);
 
   const initialFetchRef = useRef(false);
@@ -429,18 +434,22 @@ export function KanbanBoard() {
   function handleDragStart(event: DragStartEvent) {
     const id = String(event.active.id);
     setDraggingId(id);
+    setDropPreview(null);
     const original = apps.find((a) => a.id === id);
     dragOriginalRef.current = original ? { ...original } : null;
   }
 
-  // dnd-kit kanban pattern: only mutate state in onDragOver when the
-  // active card crosses a column boundary. Same-column reorder is
-  // handled visually by verticalListSortingStrategy (CSS transforms);
-  // both cases are finalized uniformly in onDragEnd by deriving a
-  // fractional position from the over-card and cursor side.
+  // No state mutation during drag. We just compute where the ghost
+  // preview should go and store it in `dropPreview`. BoardColumn renders
+  // a dimmed ApplicationCard at that slot; the dragging card itself is
+  // filtered out of the source column's display so the layout collapses
+  // around it. Persistence happens once on drop.
   function handleDragOver(event: DragOverEvent) {
     const { active, over } = event;
-    if (!over) return;
+    if (!over) {
+      setDropPreview(null);
+      return;
+    }
     const activeId = String(active.id);
     const overId = String(over.id);
 
@@ -448,99 +457,77 @@ export function KanbanBoard() {
       | { columnId?: string; type?: string }
       | undefined;
     let targetColumnId: string | null = null;
+    let overCardId: string | null = null;
     if (overData?.type === "card") {
       targetColumnId = overData.columnId ?? null;
+      overCardId = overId === activeId ? null : overId;
     } else if (overData?.type === "column") {
       targetColumnId = overData.columnId ?? overId;
     } else if (columns.some((c) => c.id === overId)) {
       targetColumnId = overId;
     }
-    if (!targetColumnId) return;
-
+    if (!targetColumnId) {
+      setDropPreview(null);
+      return;
+    }
     const targetCol = columns.find((c) => c.id === targetColumnId);
     if (!targetCol) return;
 
-    setApps((prev) => {
-      const activeApp = prev.find((a) => a.id === activeId);
-      if (!activeApp) return prev;
+    const targetCards = apps
+      .filter(
+        (a) =>
+          a.id !== activeId &&
+          (a.boardColumnId === targetColumnId ||
+            (!a.boardColumnId && targetCol.mappedStatus === a.status)),
+      )
+      .slice()
+      .sort((a, b) => {
+        if (a.position !== b.position) return a.position - b.position;
+        return new Date(a.appliedAt).getTime() - new Date(b.appliedAt).getTime();
+      });
 
-      const sourceColumnId =
-        activeApp.boardColumnId ??
-        columns.find((c) => c.mappedStatus === activeApp.status)?.id ??
-        null;
-      // Same column: don't mutate. Strategy handles visual preview.
-      if (sourceColumnId === targetColumnId) return prev;
-
-      const targetCards = prev
-        .filter(
-          (a) =>
-            a.id !== activeId &&
-            (a.boardColumnId === targetColumnId ||
-              (!a.boardColumnId && targetCol.mappedStatus === a.status)),
-        )
-        .slice()
-        .sort((a, b) => {
-          if (a.position !== b.position) return a.position - b.position;
-          return new Date(a.appliedAt).getTime() - new Date(b.appliedAt).getTime();
-        });
-
-      let insertIdx = targetCards.length;
-      if (overData?.type === "card" && overId !== activeId) {
-        const overIdx = targetCards.findIndex((c) => c.id === overId);
-        if (overIdx !== -1) {
-          // Side from cursor (activator clientY + drag delta).
-          const activator = event.activatorEvent as
-            | { clientY?: number }
-            | null;
-          const overRect = over.rect;
-          let side: "above" | "below" = "above";
-          if (activator && typeof activator.clientY === "number" && overRect) {
-            const cursorY = activator.clientY + event.delta.y;
-            const overMid = overRect.top + overRect.height / 2;
-            side = cursorY < overMid ? "above" : "below";
-          }
-          insertIdx = side === "below" ? overIdx + 1 : overIdx;
+    let insertIdx = targetCards.length;
+    if (overCardId) {
+      const overIdx = targetCards.findIndex((c) => c.id === overCardId);
+      if (overIdx !== -1) {
+        const activator = event.activatorEvent as
+          | { clientY?: number }
+          | null;
+        const overRect = over.rect;
+        let side: "above" | "below" = "above";
+        if (activator && typeof activator.clientY === "number" && overRect) {
+          const cursorY = activator.clientY + event.delta.y;
+          const overMid = overRect.top + overRect.height / 2;
+          side = cursorY < overMid ? "above" : "below";
         }
+        insertIdx = side === "below" ? overIdx + 1 : overIdx;
       }
+    }
 
-      const before = targetCards[insertIdx - 1];
-      const after = targetCards[insertIdx];
-      let newPos: number;
-      if (!before && after) newPos = after.position - 1;
-      else if (before && !after) newPos = before.position + 1;
-      else if (before && after) {
-        const gap = after.position - before.position;
-        newPos = gap > 0 ? before.position + gap / 2 : before.position + 0.5;
-      } else newPos = 1;
-
-      return prev.map((a) =>
-        a.id === activeId
-          ? {
-              ...a,
-              boardColumnId: targetColumnId,
-              status: targetCol.mappedStatus ?? a.status,
-              position: newPos,
-            }
-          : a,
-      );
+    setDropPreview((prev) => {
+      if (
+        prev &&
+        prev.columnId === targetColumnId &&
+        prev.idx === insertIdx
+      ) {
+        return prev;
+      }
+      return { columnId: targetColumnId, idx: insertIdx };
     });
   }
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setDraggingId(null);
+    setDropPreview(null);
 
     const activeId = String(active.id);
     const original = dragOriginalRef.current;
     dragOriginalRef.current = null;
 
-    // Released over nothing → restore the dragging card.
-    if (!over) {
-      if (original) {
-        setApps((prev) => prev.map((a) => (a.id === activeId ? original : a)));
-      }
-      return;
-    }
+    // Released over nothing → no state was mutated during drag, so just
+    // bail. The card stays where it was.
+    if (!over) return;
 
     const overId = String(over.id);
     const overData = over.data.current as
@@ -607,15 +594,6 @@ export function KanbanBoard() {
       Math.abs(original.position - finalPosition) < 1e-6 &&
       original.status === (targetCol.mappedStatus ?? original.status)
     ) {
-      // Still need to roll back any cross-column dragOver mutation.
-      const currentApp = apps.find((a) => a.id === activeId);
-      if (currentApp && (
-        currentApp.boardColumnId !== original.boardColumnId ||
-        Math.abs(currentApp.position - original.position) > 1e-6 ||
-        currentApp.status !== original.status
-      )) {
-        setApps((prev) => prev.map((a) => (a.id === activeId ? original : a)));
-      }
       return;
     }
 
@@ -861,6 +839,9 @@ export function KanbanBoard() {
                     cardStyle={tweaks.cardStyle}
                     selected={selected}
                     addingHere={addingTo === col.id}
+                    draggingId={draggingId}
+                    draggingApp={overlayCard}
+                    dropPreview={dropPreview}
                     onSelect={toggleSelect}
                     onPeek={(a) => setDetailApp(a)}
                     onContextMenu={(e, card) =>
