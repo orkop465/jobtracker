@@ -274,12 +274,11 @@
   box-shadow: var(--shadow-md);
 }
 .bcard:active { cursor: grabbing; }
-/* In-place active during drag is hidden so other cards' sortable
-   shifts don't overlap with it. The visible "ghost" follows the
-   cursor via DragOverlay; the empty slot the neighbors open up is
-   the drop preview. */
+/* In-place ghost during drag — translucent placeholder at the card's
+   original slot. The DragOverlay shows the moving card at the cursor;
+   this dimmed copy stays where the card came from. */
 .bcard.is-dragging {
-  opacity: 0;
+  opacity: 0.4;
   pointer-events: none;
 }
 .bcard.is-selected {
@@ -352,11 +351,8 @@
   justify-content: center;
   flex-shrink: 0;
   padding: 0;
-  opacity: 0;
-  transition: opacity 0.15s, all 0.15s;
-}
-.bcard:hover .bcard-check, .bcard.is-selected .bcard-check {
   opacity: 1;
+  transition: all 0.15s;
 }
 .bcard-check svg {
   display: block;

@@ -2,7 +2,16 @@
 
 import { useMemo } from "react";
 import { useDroppable } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext } from "@dnd-kit/sortable";
+import type { SortingStrategy } from "@dnd-kit/sortable";
+
+// No-op sorting strategy: cards stay in place during drag. The drop
+// location is decided from cursor position vs the over-card on release,
+// not from auto-shifted neighbors. Avoids the over=column edge case
+// where a strategy-shifted neighbor leaves a "no card here" gap that
+// dnd-kit reports as the column droppable, which then defaults to
+// append-at-end and silently no-ops the user's intended swap.
+const noopStrategy: SortingStrategy = () => null;
 import type { BoardColumnType, KanbanApplication } from "@/lib/board/types";
 import { ApplicationCard } from "./application-card";
 import { InlineAddForm } from "./inline-add-form";
@@ -147,7 +156,7 @@ export function BoardColumn({
           </div>
         )}
 
-        <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
+        <SortableContext items={itemIds} strategy={noopStrategy}>
           {apps.map((app) => (
             <ApplicationCard
               key={app.id}
