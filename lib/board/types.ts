@@ -3,6 +3,7 @@ export interface BoardColumnType {
   name: string;
   position: number;
   mappedStatus: string | null;
+  color: string | null;
   applicationCount: number;
 }
 
@@ -12,7 +13,10 @@ export interface KanbanApplication {
   roleTitle: string;
   status: string;
   appliedAt: string;
+  createdAt: string;
+  updatedAt: string;
   boardColumnId: string | null;
+  position: number;
   priority: string | null;
   location: string | null;
   source: string | null;
