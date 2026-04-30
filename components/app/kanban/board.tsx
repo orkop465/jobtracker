@@ -93,11 +93,6 @@ export function KanbanBoard() {
   // drag is canceled (released over nothing). Live mutation in handleDragOver
   // walks the card around target columns/positions during the drag.
   const dragOriginalRef = useRef<KanbanApplication | null>(null);
-  // Last (column, over-card, side) combination we mutated for. Guards
-  // against dnd-kit re-firing dragOver after our state mutation moves the
-  // active card — without this guard, each remutation triggers another
-  // dragOver, which mutates again, exhausting React's update budget.
-  const lastDropRef = useRef<string | null>(null);
 
   const initialFetchRef = useRef(false);
 
@@ -434,16 +429,15 @@ export function KanbanBoard() {
   function handleDragStart(event: DragStartEvent) {
     const id = String(event.active.id);
     setDraggingId(id);
-    lastDropRef.current = null;
     const original = apps.find((a) => a.id === id);
     dragOriginalRef.current = original ? { ...original } : null;
   }
 
-  // Live mutation: as the cursor moves, the dragging card's column and
-  // position are updated in `apps` so the in-place ghost slot tracks the
-  // cursor. verticalListSortingStrategy animates surrounding shifts.
-  // Mutation is keyed on (targetColumnId, overCardId, side) so dnd-kit's
-  // post-mutation re-firing of dragOver is a no-op when nothing changed.
+  // dnd-kit kanban pattern: only mutate state in onDragOver when the
+  // active card crosses a column boundary. Same-column reorder is
+  // handled visually by verticalListSortingStrategy (CSS transforms);
+  // both cases are finalized uniformly in onDragEnd by deriving a
+  // fractional position from the over-card and cursor side.
   function handleDragOver(event: DragOverEvent) {
     const { active, over } = event;
     if (!over) return;
@@ -454,10 +448,8 @@ export function KanbanBoard() {
       | { columnId?: string; type?: string }
       | undefined;
     let targetColumnId: string | null = null;
-    let overCardId: string | null = null;
     if (overData?.type === "card") {
       targetColumnId = overData.columnId ?? null;
-      overCardId = overId === activeId ? null : overId;
     } else if (overData?.type === "column") {
       targetColumnId = overData.columnId ?? overId;
     } else if (columns.some((c) => c.id === overId)) {
@@ -468,31 +460,16 @@ export function KanbanBoard() {
     const targetCol = columns.find((c) => c.id === targetColumnId);
     if (!targetCol) return;
 
-    // Side from cursor position (activator clientY + drag delta). More
-    // accurate than active.rect midpoint when the user grabs the card
-    // near its edge.
-    let side: "above" | "below" = "below";
-    if (overCardId) {
-      const activator = event.activatorEvent as
-        | { clientY?: number }
-        | null;
-      const overRect = over.rect;
-      if (activator && typeof activator.clientY === "number" && overRect) {
-        const cursorY = activator.clientY + event.delta.y;
-        const overMid = overRect.top + overRect.height / 2;
-        side = cursorY < overMid ? "above" : "below";
-      } else {
-        side = "above";
-      }
-    }
-
-    const dropKey = `${targetColumnId}|${overCardId ?? "end"}|${side}`;
-    if (lastDropRef.current === dropKey) return;
-    lastDropRef.current = dropKey;
-
     setApps((prev) => {
       const activeApp = prev.find((a) => a.id === activeId);
       if (!activeApp) return prev;
+
+      const sourceColumnId =
+        activeApp.boardColumnId ??
+        columns.find((c) => c.mappedStatus === activeApp.status)?.id ??
+        null;
+      // Same column: don't mutate. Strategy handles visual preview.
+      if (sourceColumnId === targetColumnId) return prev;
 
       const targetCards = prev
         .filter(
@@ -508,9 +485,20 @@ export function KanbanBoard() {
         });
 
       let insertIdx = targetCards.length;
-      if (overCardId) {
-        const overIdx = targetCards.findIndex((c) => c.id === overCardId);
+      if (overData?.type === "card" && overId !== activeId) {
+        const overIdx = targetCards.findIndex((c) => c.id === overId);
         if (overIdx !== -1) {
+          // Side from cursor (activator clientY + drag delta).
+          const activator = event.activatorEvent as
+            | { clientY?: number }
+            | null;
+          const overRect = over.rect;
+          let side: "above" | "below" = "above";
+          if (activator && typeof activator.clientY === "number" && overRect) {
+            const cursorY = activator.clientY + event.delta.y;
+            const overMid = overRect.top + overRect.height / 2;
+            side = cursorY < overMid ? "above" : "below";
+          }
           insertIdx = side === "below" ? overIdx + 1 : overIdx;
         }
       }
@@ -524,13 +512,6 @@ export function KanbanBoard() {
         const gap = after.position - before.position;
         newPos = gap > 0 ? before.position + gap / 2 : before.position + 0.5;
       } else newPos = 1;
-
-      if (
-        activeApp.boardColumnId === targetColumnId &&
-        Math.abs(activeApp.position - newPos) < 1e-6
-      ) {
-        return prev;
-      }
 
       return prev.map((a) =>
         a.id === activeId
@@ -548,13 +529,12 @@ export function KanbanBoard() {
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setDraggingId(null);
-    lastDropRef.current = null;
 
     const activeId = String(active.id);
     const original = dragOriginalRef.current;
     dragOriginalRef.current = null;
 
-    // Released over nothing → restore the dragging card to its pre-drag state.
+    // Released over nothing → restore the dragging card.
     if (!over) {
       if (original) {
         setApps((prev) => prev.map((a) => (a.id === activeId ? original : a)));
@@ -562,25 +542,95 @@ export function KanbanBoard() {
       return;
     }
 
-    const finalApp = apps.find((a) => a.id === activeId);
-    if (!finalApp) return;
+    const overId = String(over.id);
+    const overData = over.data.current as
+      | { columnId?: string; type?: string }
+      | undefined;
 
-    // No real change vs. the pre-drag state → skip persistence.
-    if (
-      original &&
-      original.boardColumnId === finalApp.boardColumnId &&
-      Math.abs(original.position - finalApp.position) < 1e-6 &&
-      original.status === finalApp.status
-    ) {
-      return;
+    // Resolve target column. Same-column reorders never touched apps in
+    // dragOver, so source column is from the original snapshot.
+    let targetColumnId: string | null = null;
+    if (overData?.type === "card") targetColumnId = overData.columnId ?? null;
+    else if (overData?.type === "column") {
+      targetColumnId = overData.columnId ?? overId;
+    } else if (columns.some((c) => c.id === overId)) {
+      targetColumnId = overId;
     }
-
-    const targetColumnId = finalApp.boardColumnId;
+    if (!targetColumnId) {
+      const fallback =
+        original?.boardColumnId ??
+        columns.find((c) => c.mappedStatus === original?.status)?.id ??
+        null;
+      targetColumnId = fallback;
+    }
     if (!targetColumnId) return;
     const targetCol = columns.find((c) => c.id === targetColumnId);
     if (!targetCol) return;
 
-    const finalPosition = finalApp.position;
+    // Compute final position from over + cursor side. Uniform for
+    // same-column and cross-column drops — uses neighbors in the
+    // target column to derive a fractional position.
+    const targetCards = cardsInColumn(targetColumnId, new Set([activeId]));
+    let insertIdx = targetCards.length;
+    if (overData?.type === "card" && overId !== activeId) {
+      const overIdx = targetCards.findIndex((c) => c.id === overId);
+      if (overIdx !== -1) {
+        const activator = event.activatorEvent as
+          | { clientY?: number }
+          | null;
+        const overRect = over.rect;
+        let side: "above" | "below" = "above";
+        if (activator && typeof activator.clientY === "number" && overRect) {
+          const cursorY = activator.clientY + event.delta.y;
+          const overMid = overRect.top + overRect.height / 2;
+          side = cursorY < overMid ? "above" : "below";
+        }
+        insertIdx = side === "below" ? overIdx + 1 : overIdx;
+      }
+    }
+
+    const before = targetCards[insertIdx - 1];
+    const after = targetCards[insertIdx];
+    let finalPosition: number;
+    if (!before && after) finalPosition = after.position - 1;
+    else if (before && !after) finalPosition = before.position + 1;
+    else if (before && after) {
+      const gap = after.position - before.position;
+      finalPosition =
+        gap > 0 ? before.position + gap / 2 : before.position + 0.5;
+    } else finalPosition = 1;
+
+    // Skip persistence when the drop lands at the original spot.
+    if (
+      original &&
+      original.boardColumnId === targetColumnId &&
+      Math.abs(original.position - finalPosition) < 1e-6 &&
+      original.status === (targetCol.mappedStatus ?? original.status)
+    ) {
+      // Still need to roll back any cross-column dragOver mutation.
+      const currentApp = apps.find((a) => a.id === activeId);
+      if (currentApp && (
+        currentApp.boardColumnId !== original.boardColumnId ||
+        Math.abs(currentApp.position - original.position) > 1e-6 ||
+        currentApp.status !== original.status
+      )) {
+        setApps((prev) => prev.map((a) => (a.id === activeId ? original : a)));
+      }
+      return;
+    }
+
+    setApps((prev) =>
+      prev.map((a) =>
+        a.id === activeId
+          ? {
+              ...a,
+              boardColumnId: targetColumnId,
+              status: targetCol.mappedStatus ?? a.status,
+              position: finalPosition,
+            }
+          : a,
+      ),
+    );
 
     // Multi-select: pack the rest of the selection in positions just after
     // the active card.

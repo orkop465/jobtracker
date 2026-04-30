@@ -274,9 +274,13 @@
   box-shadow: var(--shadow-md);
 }
 .bcard:active { cursor: grabbing; }
+/* In-place active during drag is hidden so other cards' sortable
+   shifts don't overlap with it. The visible "ghost" follows the
+   cursor via DragOverlay; the empty slot the neighbors open up is
+   the drop preview. */
 .bcard.is-dragging {
-  opacity: 0.45;
-  transform: scale(0.97) rotate(-0.5deg) !important;
+  opacity: 0;
+  pointer-events: none;
 }
 .bcard.is-selected {
   border-color: var(--accent);
