@@ -5,6 +5,7 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import type { BoardColumnType, KanbanApplication } from "@/lib/board/types";
 import { ApplicationCard } from "./application-card";
 import { InlineAddForm } from "./inline-add-form";
+import { DropIndicator } from "./drop-indicator";
 import {
   daysSince,
   descForStatus,
@@ -20,6 +21,8 @@ interface BoardColumnProps {
   cardStyle: CardStyle;
   selected: Set<string>;
   addingHere: boolean;
+  draggingId: string | null;
+  overInfo: { id: string; side: "above" | "below"; columnId: string } | null;
   onSelect: (id: string) => void;
   onPeek: (app: KanbanApplication) => void;
   onContextMenu: (e: React.MouseEvent, app: KanbanApplication) => void;
@@ -35,6 +38,8 @@ export function BoardColumn({
   cardStyle,
   selected,
   addingHere,
+  draggingId,
+  overInfo,
   onSelect,
   onPeek,
   onContextMenu,
@@ -46,6 +51,12 @@ export function BoardColumn({
     id: column.id,
     data: { columnId: column.id, type: "column" },
   });
+
+  const isTargetCol = overInfo?.columnId === column.id;
+  const overCardIdx = isTargetCol && overInfo?.id !== column.id
+    ? apps.findIndex((a) => a.id === overInfo!.id)
+    : -1;
+  const overSide = overInfo?.side ?? "above";
 
   const itemIds = apps.map((a) => a.id);
   const stalledCount = apps.filter((a) => isStalled(a.status, a.updatedAt)).length;
@@ -143,19 +154,28 @@ export function BoardColumn({
         )}
 
         <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
-          {apps.map((app) => (
-            <ApplicationCard
-              key={app.id}
-              app={app}
-              columnId={column.id}
-              density={density}
-              cardStyle={cardStyle}
-              selected={selected.has(app.id)}
-              onSelect={onSelect}
-              onPeek={onPeek}
-              onContextMenu={onContextMenu}
-            />
-          ))}
+          {apps.map((app, i) => {
+            const showAbove =
+              overCardIdx === i && overSide === "above" && draggingId !== app.id;
+            const showBelow =
+              overCardIdx === i && overSide === "below" && draggingId !== app.id;
+            return (
+              <div key={app.id}>
+                {showAbove && <DropIndicator />}
+                <ApplicationCard
+                  app={app}
+                  columnId={column.id}
+                  density={density}
+                  cardStyle={cardStyle}
+                  selected={selected.has(app.id)}
+                  onSelect={onSelect}
+                  onPeek={onPeek}
+                  onContextMenu={onContextMenu}
+                />
+                {showBelow && <DropIndicator />}
+              </div>
+            );
+          })}
         </SortableContext>
       </div>
     </div>
