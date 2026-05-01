@@ -30,11 +30,45 @@ export async function GET() {
   const userId = await getUserIdOrNull();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const items = await prisma.resume.findMany({
+  const resumes = await prisma.resume.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
     take: 500,
+    include: {
+      _count: { select: { applications: true } },
+    },
   });
+
+  // One extra query to fetch the most recent appliedAt per resume. Two
+  // round-trips total (resumes + last-applied) keeps the page-load cost
+  // bounded regardless of resume count.
+  const resumeIds = resumes.map((r) => r.id);
+  const lastApplied =
+    resumeIds.length === 0
+      ? []
+      : await prisma.application.groupBy({
+          by: ["resumeId"],
+          where: { userId, resumeId: { in: resumeIds } },
+          _max: { appliedAt: true },
+        });
+  const lastByResume = new Map<string, string>();
+  for (const row of lastApplied) {
+    if (row.resumeId && row._max.appliedAt) {
+      lastByResume.set(row.resumeId, row._max.appliedAt.toISOString());
+    }
+  }
+
+  const items = resumes.map((r) => ({
+    id: r.id,
+    label: r.label,
+    filename: r.filename,
+    mimeType: r.mimeType,
+    sizeBytes: r.sizeBytes,
+    createdAt: r.createdAt,
+    gcsPath: r.gcsPath,
+    sentCount: r._count.applications,
+    lastAppliedAt: lastByResume.get(r.id) ?? null,
+  }));
 
   return NextResponse.json({ items });
 }

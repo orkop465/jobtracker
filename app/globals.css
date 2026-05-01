@@ -2,6 +2,7 @@
 @import "../styles/design/app-shell.css";
 @import "../styles/design/dashboard.css";
 @import "../styles/design/board.css";
+@import "../styles/design/resumes.css";
 
 @theme inline {
   /* canvas */

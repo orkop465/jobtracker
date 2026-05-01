@@ -388,6 +388,14 @@ export function CardDetailPanel({
                       </option>
                     ))}
                   </select>
+                  {form.resumeId && (
+                    <a
+                      href={`/app/resumes?focus=${form.resumeId}`}
+                      className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] mt-1.5 inline-block"
+                    >
+                      View resume →
+                    </a>
+                  )}
                 </div>
               </div>
               <div>
