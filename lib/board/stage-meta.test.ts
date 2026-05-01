@@ -92,12 +92,13 @@ describe("drag-drop end-to-end position derivation", () => {
     expect(newPos).toBeLessThan(1);
   });
 
-  it("same-column no-op (B over A, side=below) → B stays below A", () => {
+  it("computes 'insert below A' as A.position + 1", () => {
+    // Math primitive only — same-column reorders use arrayMove on
+    // dragEnd, not this cursor-side path. This branch is now reserved
+    // for cross-column drops on a card and column-body drops.
     const targetCards = [{ id: "a", position: 1 }];
     const idx = computeDropInsertIdx(targetCards, "a", "below");
     const newPos = computeDropPosition(targetCards, idx);
-    // B was at 2; a "below A" computation yields A.pos+1 = 2 → caller
-    // skips the PATCH because it equals B's existing position.
     expect(newPos).toBe(2);
   });
 
