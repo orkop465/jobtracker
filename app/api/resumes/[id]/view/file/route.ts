@@ -27,42 +27,52 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   const userId = session?.user?.id;
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id } = await ctx.params;
-  const resumeId = IdSchema.parse(id);
+  try {
+    const { id } = await ctx.params;
+    const resumeId = IdSchema.parse(id);
 
-  const resume = await prisma.resume.findFirst({
-    where: { id: resumeId, userId },
-    select: { gcsPath: true, filename: true, mimeType: true },
-  });
+    const resume = await prisma.resume.findFirst({
+      where: { id: resumeId, userId },
+      select: { gcsPath: true, filename: true, mimeType: true },
+    });
 
-  if (!resume) {
-    return NextResponse.json({ error: "Resume not found" }, { status: 404 });
+    if (!resume) {
+      return NextResponse.json({ error: "Resume not found" }, { status: 404 });
+    }
+
+    const { bucket, object } = parseGsPath(resume.gcsPath);
+    const file = storage.bucket(bucket).file(object);
+
+    const nodeStream = file.createReadStream();
+    // Convert Node Readable → Web ReadableStream so Next can stream the response.
+    const webStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        nodeStream.on("data", (chunk) => controller.enqueue(chunk));
+        nodeStream.on("end", () => controller.close());
+        nodeStream.on("error", (err) => {
+          console.error("[resume-proxy] GCS stream error", err);
+          controller.error(err);
+        });
+      },
+      cancel() {
+        nodeStream.destroy();
+      },
+    });
+
+    const safeName = (resume.filename || "resume.pdf").replace(/[\r\n"]/g, "");
+    return new Response(webStream, {
+      status: 200,
+      headers: {
+        "Content-Type": resume.mimeType || "application/pdf",
+        "Content-Disposition": `inline; filename="${safeName}"`,
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : String(err) },
+      { status: 400 }
+    );
   }
-
-  const { bucket, object } = parseGsPath(resume.gcsPath);
-  const file = storage.bucket(bucket).file(object);
-
-  const nodeStream = file.createReadStream();
-  // Convert Node Readable → Web ReadableStream so Next can stream the response.
-  const webStream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      nodeStream.on("data", (chunk) => controller.enqueue(chunk));
-      nodeStream.on("end", () => controller.close());
-      nodeStream.on("error", (err) => controller.error(err));
-    },
-    cancel() {
-      nodeStream.destroy();
-    },
-  });
-
-  const safeName = (resume.filename || "resume.pdf").replace(/"/g, "");
-  return new Response(webStream, {
-    status: 200,
-    headers: {
-      "Content-Type": resume.mimeType || "application/pdf",
-      "Content-Disposition": `inline; filename="${safeName}"`,
-      "Cache-Control": "private, no-store",
-      "X-Content-Type-Options": "nosniff",
-    },
-  });
 }
