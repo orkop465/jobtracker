@@ -197,6 +197,25 @@ export function KanbanBoard() {
     });
   }, [apps, detailAppId]);
 
+  // Deep link: /app/applications?open=<appId> opens that card's detail
+  // panel once apps have loaded. Used by the resumes page sent log.
+  // Only fires once per mount so closing the panel doesn't immediately
+  // reopen it.
+  const openParamHandledRef = useRef(false);
+  useEffect(() => {
+    if (openParamHandledRef.current) return;
+    if (apps.length === 0) return;
+    if (typeof window === "undefined") return;
+    const openId = new URL(window.location.href).searchParams.get("open");
+    if (!openId) {
+      openParamHandledRef.current = true;
+      return;
+    }
+    const target = apps.find((a) => a.id === openId);
+    if (target) setDetailApp(target);
+    openParamHandledRef.current = true;
+  }, [apps]);
+
   // ── Filtering ──────────────────────────────────────────────
   const visibleApps = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -676,15 +695,33 @@ export function KanbanBoard() {
 
     if (!over) return;
 
+    // Active's CURRENT column (post any dragOver mutations). If
+    // dragOver moved it cross-column, that's the authoritative landing
+    // column — NOT whatever the cursor happens to be over at release.
+    // Without this guard, a cursor that wanders back near the source
+    // column at release would force the same-column arrayMove branch,
+    // which then bails because active isn't in the source column's
+    // items list anymore (it's in the target). No PATCH, state shows
+    // moved locally, refresh reverts to source.
+    const activeAppNow = appsRef.current.find((a) => a.id === activeId);
+    const activeCurrentCol = activeAppNow?.boardColumnId ?? null;
+    const wasMovedCrossColumn =
+      !!original &&
+      !!activeCurrentCol &&
+      original.boardColumnId !== activeCurrentCol;
+
     const { targetColumnId: resolvedColumnId, overCardId } = resolveTarget(over);
-    const targetColumnId =
-      resolvedColumnId ?? original?.boardColumnId ?? null;
+    const targetColumnId = wasMovedCrossColumn
+      ? activeCurrentCol
+      : resolvedColumnId ?? original?.boardColumnId ?? null;
     if (!targetColumnId) return;
     const targetCol = columns.find((c) => c.id === targetColumnId);
     if (!targetCol) return;
 
     const wasOriginallySameColumn =
-      !!original && original.boardColumnId === targetColumnId;
+      !wasMovedCrossColumn &&
+      !!original &&
+      original.boardColumnId === targetColumnId;
 
     let finalPosition: number;
 
