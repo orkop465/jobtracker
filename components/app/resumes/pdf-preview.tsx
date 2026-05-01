@@ -1,55 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 interface Props {
   resumeId: string;
 }
 
 /**
- * Renders the active resume as an iframe of a freshly minted signed URL.
- * The parent should use `key={resumeId}` so the component remounts on
- * resume switch — that gives us a clean initial render without needing
- * to synchronously reset state inside the effect body.
+ * Renders the active resume in an iframe pointed at our same-origin proxy.
+ * The proxy enforces auth + ownership server-side and streams the GCS object
+ * with `Content-Disposition: inline`, so the browser embeds the PDF without
+ * the cross-origin block the prior signed-URL flow tripped.
  */
 export function PdfPreview({ resumeId }: Props) {
-  const [state, setState] = useState<{ url: string | null; error: string | null }>({
-    url: null,
-    error: null,
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const res = await fetch(`/api/resumes/${resumeId}/view`, { cache: "no-store" });
-        const data = await res.json().catch(() => null);
-        if (cancelled) return;
-        if (!res.ok || !data?.url) {
-          setState({ url: null, error: data?.error ?? "Failed to load PDF" });
-          return;
-        }
-        setState({ url: data.url, error: null });
-      } catch (e) {
-        if (!cancelled) {
-          setState({ url: null, error: e instanceof Error ? e.message : "Failed to load PDF" });
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [resumeId]);
+  const [loaded, setLoaded] = useState(false);
 
   return (
     <div className="res-pdf-frame-wrap">
-      {state.url ? (
-        <iframe className="res-pdf-frame" src={state.url} title="Resume preview" />
-      ) : (
-        <div className="res-pdf-loading">{state.error ?? "Loading preview…"}</div>
-      )}
+      {!loaded && <div className="res-pdf-loading">Loading preview…</div>}
+      <iframe
+        key={resumeId}
+        className="res-pdf-frame"
+        src={`/api/resumes/${resumeId}/view/file`}
+        title="Resume preview"
+        onLoad={() => setLoaded(true)}
+        style={{ visibility: loaded ? "visible" : "hidden" }}
+      />
     </div>
   );
 }
