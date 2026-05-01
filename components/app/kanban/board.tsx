@@ -430,13 +430,18 @@ export function KanbanBoard() {
 
   // Cards in `targetColumnId` (excluding any in `excludeIds`) sorted by
   // position then appliedAt. Used both for live preview during drag and
-  // for the final persist on drop.
+  // for the final persist on drop. Reads from appsRef.current so it
+  // sees mutations made within the same event tick (handleDragOver
+  // setApps + handleDragEnd both fire from dnd-kit dispatches; the
+  // closure-captured `apps` may be one render behind).
+  const appsRef = useRef(apps);
+  appsRef.current = apps;
   function cardsInColumn(
     targetColumnId: string,
     excludeIds: Set<string> = new Set(),
   ): KanbanApplication[] {
     const targetCol = columns.find((c) => c.id === targetColumnId);
-    return apps
+    return appsRef.current
       .filter(
         (a) =>
           !excludeIds.has(a.id) &&
@@ -514,7 +519,7 @@ export function KanbanBoard() {
       const insertIdx = computeDropInsertIdx(targetCards, overCardId, side);
       const newPos = computeDropPosition(targetCards, insertIdx);
 
-      return prev.map((a) =>
+      const next = prev.map((a) =>
         a.id === activeId
           ? {
               ...a,
@@ -524,6 +529,10 @@ export function KanbanBoard() {
             }
           : a,
       );
+      // Sync the ref so handleDragEnd's cardsInColumn() sees the
+      // mutated state even if React hasn't re-rendered yet.
+      appsRef.current = next;
+      return next;
     });
   }
 
@@ -583,38 +592,66 @@ export function KanbanBoard() {
     const targetCol = columns.find((c) => c.id === targetColumnId);
     if (!targetCol) return;
 
-    // For same-column drop on another card, use arrayMove with the
-    // over-card's index — same swap semantics dnd-kit's
-    // verticalListSortingStrategy uses for the visual shift, so the
-    // commit matches what the user sees during the drag (no need to
-    // cross the over-card's midpoint to trigger the swap).
+    // Drop on a card → use arrayMove based on the target column's
+    // current order (which already includes the active card if dragOver
+    // moved it cross-column). This is the same swap semantic
+    // verticalListSortingStrategy uses for the live preview, so the
+    // commit lands where the user sees the ghost.
+    //
+    // Drop on column body (no card under cursor) → use cursor side
+    // (above/below) against the over-card if available, else append.
     const overCardId =
       overData?.type === "card" && overId !== activeId ? overId : null;
-    const sourceColumnId =
-      original?.boardColumnId ??
-      columns.find((c) => c.mappedStatus === original?.status)?.id ??
-      null;
-    const sameColumn = sourceColumnId === targetColumnId;
 
     let finalPosition: number;
-    if (sameColumn && overCardId) {
-      const colCards = cardsInColumn(targetColumnId);
+    if (overCardId) {
+      // Make sure the active card is in target column (cross-column
+      // dragOver may have already done this). If it isn't, add it
+      // synthetically at the over-card's index for the arrayMove.
+      const colCardsRaw = cardsInColumn(targetColumnId);
+      const hasActive = colCardsRaw.some((c) => c.id === activeId);
+      const colCards = hasActive
+        ? colCardsRaw
+        : (() => {
+            const overIdxRaw = colCardsRaw.findIndex((c) => c.id === overCardId);
+            const insertAt = overIdxRaw === -1 ? colCardsRaw.length : overIdxRaw;
+            const synthetic = original ?? {
+              id: activeId,
+              position: 0,
+              appliedAt: new Date().toISOString(),
+            } as KanbanApplication;
+            return [
+              ...colCardsRaw.slice(0, insertAt),
+              synthetic,
+              ...colCardsRaw.slice(insertAt),
+            ];
+          })();
+
       const oldIdx = colCards.findIndex((c) => c.id === activeId);
       const newIdx = colCards.findIndex((c) => c.id === overCardId);
-      if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return;
-      const reordered = arrayMove(colCards, oldIdx, newIdx);
-      const at = reordered.findIndex((c) => c.id === activeId);
-      const before = reordered[at - 1];
-      const after = reordered[at + 1];
-      if (!before && after) finalPosition = after.position - 1;
-      else if (before && !after) finalPosition = before.position + 1;
-      else if (before && after) {
-        const gap = after.position - before.position;
-        finalPosition =
-          gap > 0 ? before.position + gap / 2 : before.position + 0.5;
-      } else finalPosition = 1;
+      if (oldIdx === -1 || newIdx === -1) {
+        const targetCards = cardsInColumn(targetColumnId, new Set([activeId]));
+        const side = sideFromCursor(event, overCardId);
+        const insertIdx = computeDropInsertIdx(targetCards, overCardId, side);
+        finalPosition = computeDropPosition(targetCards, insertIdx);
+      } else if (oldIdx === newIdx) {
+        return;
+      } else {
+        const reordered = arrayMove(colCards, oldIdx, newIdx);
+        const at = reordered.findIndex((c) => c.id === activeId);
+        const before = reordered[at - 1];
+        const after = reordered[at + 1];
+        if (!before && after) finalPosition = after.position - 1;
+        else if (before && !after) finalPosition = before.position + 1;
+        else if (before && after) {
+          const gap = after.position - before.position;
+          finalPosition =
+            gap > 0 ? before.position + gap / 2 : before.position + 0.5;
+        } else finalPosition = 1;
+      }
     } else {
-      // Cross-column or drop on column body: use cursor side.
+      // Drop on column body — append at end (or above first if cursor in
+      // upper area).
       const targetCards = cardsInColumn(targetColumnId, new Set([activeId]));
       const side = sideFromCursor(event, overCardId);
       const insertIdx = computeDropInsertIdx(targetCards, overCardId, side);
@@ -887,7 +924,7 @@ export function KanbanBoard() {
               </div>
             </div>
 
-            <DragOverlay>
+            <DragOverlay dropAnimation={null}>
               {overlayCard ? (
                 <ApplicationCard
                   app={overlayCard}
