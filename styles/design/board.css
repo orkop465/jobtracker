@@ -265,13 +265,21 @@
   font-size: 12.5px;
   cursor: grab;
   position: relative;
-  transition: all 0.15s ease, transform 0.2s ease;
+  /* Don't transition `transform` on the base — useSortable applies its
+     own transform during drag, and a 0.2s ease on transform causes the
+     in-place card to animate through stale positions when state mutates
+     mid-drag (the post-drop "flicker"). Hover gets its own transform
+     transition so the lift effect still feels nice. */
+  transition: background 0.15s ease, border-color 0.15s ease,
+    box-shadow 0.15s ease;
   box-shadow: var(--shadow-sm);
 }
 .bcard:hover {
   border-color: var(--line-2);
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
+  transition: background 0.15s ease, border-color 0.15s ease,
+    box-shadow 0.15s ease, transform 0.2s ease;
 }
 .bcard:active { cursor: grabbing; }
 /* Dragging card stays visible as a faded ghost at its source slot.

@@ -14,7 +14,6 @@ import {
   type DragStartEvent,
   MeasuringStrategy,
 } from "@dnd-kit/core";
-import { arrayMove } from "@dnd-kit/sortable";
 import { useToast } from "@/components/ui/toast";
 import type { BoardColumnType, KanbanApplication } from "@/lib/board/types";
 import {
@@ -496,11 +495,6 @@ export function KanbanBoard() {
     setApps((prev) => {
       const activeApp = prev.find((a) => a.id === activeId);
       if (!activeApp) return prev;
-      const sourceColumnId =
-        activeApp.boardColumnId ??
-        columns.find((c) => c.mappedStatus === activeApp.status)?.id ??
-        null;
-      if (sourceColumnId === targetColumnId) return prev;
 
       const targetCards = prev
         .filter(
@@ -519,6 +513,15 @@ export function KanbanBoard() {
       const insertIdx = computeDropInsertIdx(targetCards, overCardId, side);
       const newPos = computeDropPosition(targetCards, insertIdx);
 
+      // Skip if nothing actually changes — keeps the loop bounded by
+      // distinct cursor regions, not by render frequency.
+      if (
+        activeApp.boardColumnId === targetColumnId &&
+        Math.abs(activeApp.position - newPos) < 1e-6
+      ) {
+        return prev;
+      }
+
       const next = prev.map((a) =>
         a.id === activeId
           ? {
@@ -529,8 +532,6 @@ export function KanbanBoard() {
             }
           : a,
       );
-      // Sync the ref so handleDragEnd's cardsInColumn() sees the
-      // mutated state even if React hasn't re-rendered yet.
       appsRef.current = next;
       return next;
     });
@@ -563,107 +564,27 @@ export function KanbanBoard() {
     const original = dragOriginalRef.current;
     dragOriginalRef.current = null;
 
-    // Released over nothing → no state was mutated during drag, so just
-    // bail. The card stays where it was.
+    // dragOver continuously updates active's column + position during
+    // the drag. dragEnd just persists whatever's currently there — what
+    // the user sees IS what gets saved.
     if (!over) return;
 
-    const overId = String(over.id);
-    const overData = over.data.current as
-      | { columnId?: string; type?: string }
-      | undefined;
+    const finalApp = appsRef.current.find((a) => a.id === activeId);
+    if (!finalApp) return;
 
-    // Resolve target column. Same-column reorders never touched apps in
-    // dragOver, so source column is from the original snapshot.
-    let targetColumnId: string | null = null;
-    if (overData?.type === "card") targetColumnId = overData.columnId ?? null;
-    else if (overData?.type === "column") {
-      targetColumnId = overData.columnId ?? overId;
-    } else if (columns.some((c) => c.id === overId)) {
-      targetColumnId = overId;
-    }
-    if (!targetColumnId) {
-      const fallback =
-        original?.boardColumnId ??
-        columns.find((c) => c.mappedStatus === original?.status)?.id ??
-        null;
-      targetColumnId = fallback;
-    }
+    const targetColumnId = finalApp.boardColumnId;
     if (!targetColumnId) return;
     const targetCol = columns.find((c) => c.id === targetColumnId);
     if (!targetCol) return;
 
-    // Drop on a card → use arrayMove based on the target column's
-    // current order (which already includes the active card if dragOver
-    // moved it cross-column). This is the same swap semantic
-    // verticalListSortingStrategy uses for the live preview, so the
-    // commit lands where the user sees the ghost.
-    //
-    // Drop on column body (no card under cursor) → use cursor side
-    // (above/below) against the over-card if available, else append.
-    const overCardId =
-      overData?.type === "card" && overId !== activeId ? overId : null;
+    const finalPosition = finalApp.position;
 
-    let finalPosition: number;
-    if (overCardId) {
-      // Make sure the active card is in target column (cross-column
-      // dragOver may have already done this). If it isn't, add it
-      // synthetically at the over-card's index for the arrayMove.
-      const colCardsRaw = cardsInColumn(targetColumnId);
-      const hasActive = colCardsRaw.some((c) => c.id === activeId);
-      const colCards = hasActive
-        ? colCardsRaw
-        : (() => {
-            const overIdxRaw = colCardsRaw.findIndex((c) => c.id === overCardId);
-            const insertAt = overIdxRaw === -1 ? colCardsRaw.length : overIdxRaw;
-            const synthetic = original ?? {
-              id: activeId,
-              position: 0,
-              appliedAt: new Date().toISOString(),
-            } as KanbanApplication;
-            return [
-              ...colCardsRaw.slice(0, insertAt),
-              synthetic,
-              ...colCardsRaw.slice(insertAt),
-            ];
-          })();
-
-      const oldIdx = colCards.findIndex((c) => c.id === activeId);
-      const newIdx = colCards.findIndex((c) => c.id === overCardId);
-      if (oldIdx === -1 || newIdx === -1) {
-        const targetCards = cardsInColumn(targetColumnId, new Set([activeId]));
-        const side = sideFromCursor(event, overCardId);
-        const insertIdx = computeDropInsertIdx(targetCards, overCardId, side);
-        finalPosition = computeDropPosition(targetCards, insertIdx);
-      } else if (oldIdx === newIdx) {
-        return;
-      } else {
-        const reordered = arrayMove(colCards, oldIdx, newIdx);
-        const at = reordered.findIndex((c) => c.id === activeId);
-        const before = reordered[at - 1];
-        const after = reordered[at + 1];
-        if (!before && after) finalPosition = after.position - 1;
-        else if (before && !after) finalPosition = before.position + 1;
-        else if (before && after) {
-          const gap = after.position - before.position;
-          finalPosition =
-            gap > 0 ? before.position + gap / 2 : before.position + 0.5;
-        } else finalPosition = 1;
-      }
-    } else {
-      // Drop on column body — append at end (or above first if cursor in
-      // upper area).
-      const targetCards = cardsInColumn(targetColumnId, new Set([activeId]));
-      const side = sideFromCursor(event, overCardId);
-      const insertIdx = computeDropInsertIdx(targetCards, overCardId, side);
-      finalPosition = computeDropPosition(targetCards, insertIdx);
-    }
-
-    // Skip persistence when the drop lands at the original spot.
+    // No real change vs. original snapshot → skip the PATCH.
     if (
       original &&
       original.boardColumnId === targetColumnId &&
       Math.abs(original.position - finalPosition) < 1e-6 &&
-      original.status === (targetCol.mappedStatus ?? original.status)
+      original.status === finalApp.status
     ) {
       return;
     }
