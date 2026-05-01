@@ -1,176 +1,389 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ErrorBanner } from "@/components/ui/error-banner";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useToast } from "@/components/ui/toast";
+import { LibraryCard } from "@/components/app/resumes/library-card";
+import { DropZone } from "@/components/app/resumes/dropzone";
+import { ParseAnimation } from "@/components/app/resumes/parse-animation";
+import { PdfPreview } from "@/components/app/resumes/pdf-preview";
+import { SentLog } from "@/components/app/resumes/sent-log";
+import { DragOverlay } from "@/components/app/resumes/drag-overlay";
+import {
+  deriveTag,
+  relativeTime,
+  type DerivedTag,
+  type Resume,
+} from "@/components/app/resumes/types";
 
-type Resume = {
-  id: string;
-  label: string;
-  filename: string;
-  mimeType: string;
-  sizeBytes: number;
-  createdAt: string;
-  gcsPath: string;
-};
+type TagFilter = "all" | DerivedTag;
+
+const TAG_PILLS: { id: TagFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "swe", label: "SWE" },
+  { id: "pm", label: "PM" },
+  { id: "design", label: "Design" },
+  { id: "data", label: "Data" },
+  { id: "ml", label: "ML" },
+];
+
+const MAX_BYTES = 2 * 1024 * 1024;
 
 async function safeJson(res: Response) {
-  try { return await res.json(); } catch { return null; }
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
 }
 
-export default function ResumesPage() {
-  const { toast } = useToast();
-  const [items, setItems] = useState<Resume[]>([]);
-  const [label, setLabel] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
+function defaultLabelFromFilename(name: string): string {
+  return name.replace(/\.[a-z0-9]+$/i, "").trim().slice(0, 120) || "Untitled resume";
+}
 
-  async function load(showSpinner = true) {
+function ResumesView() {
+  const { toast } = useToast();
+  const searchParams = useSearchParams();
+  const focusId = searchParams.get("focus");
+
+  const [resumes, setResumes] = useState<Resume[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [tagFilter, setTagFilter] = useState<TagFilter>("all");
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
+
+  // Upload flow state
+  const [uploading, setUploading] = useState(false);
+  const [uploadDone, setUploadDone] = useState(false);
+  const [uploadFilename, setUploadFilename] = useState("");
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const newlyCreatedIdRef = useRef<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const load = useCallback(async (showSpinner = true) => {
     if (showSpinner) setLoading(true);
-    setErr(null);
+    setListError(null);
     try {
       const res = await fetch("/api/resumes", { cache: "no-store" });
       const data = await safeJson(res);
       if (!res.ok) {
-        setItems([]);
-        setErr(data?.error ?? `Failed to load resumes (${res.status})`);
-      } else {
-        setItems(data?.items ?? []);
+        setResumes([]);
+        setListError(data?.error ?? `Failed to load resumes (${res.status})`);
+        return;
       }
+      const items: Resume[] = data?.items ?? [];
+      setResumes(items);
+      setActiveId((current) => {
+        if (newlyCreatedIdRef.current) {
+          const next = newlyCreatedIdRef.current;
+          newlyCreatedIdRef.current = null;
+          return next;
+        }
+        if (current && items.some((r) => r.id === current)) return current;
+        return items[0]?.id ?? null;
+      });
     } catch (e) {
       console.error("[resumes] load failed", e);
-      setItems([]);
-      setErr("Failed to load resumes. Check your connection and retry.");
+      setResumes([]);
+      setListError("Failed to load resumes. Check your connection and retry.");
     } finally {
       if (showSpinner) setLoading(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { load(true); }, []);
+  useEffect(() => {
+    load(true);
+  }, [load]);
 
-  async function onUpload(e: React.FormEvent) {
-    e.preventDefault();
-    setErr(null);
-
-    if (!label.trim()) { setErr("Label is required"); return; }
-    if (!file) { setErr("PDF file is required"); return; }
-    if (file.type !== "application/pdf") { setErr("Only PDF files are allowed"); return; }
-    if (file.size > 2 * 1024 * 1024) { setErr("PDF must be 2MB or smaller"); return; }
-
-    if (busy) return; // double-submit guard
-    setBusy(true);
-    try {
-      const fd = new FormData();
-      fd.append("label", label.trim());
-      fd.append("file", file);
-      const res = await fetch("/api/resumes", { method: "POST", body: fd });
-      const data = await safeJson(res);
-      if (!res.ok) { setErr(data?.error ?? "Upload failed"); return; }
-      toast("Resume uploaded", "success");
-      setLabel("");
-      setFile(null);
-      // Reset the file input
-      const fileInput = document.getElementById("resume-file-input") as HTMLInputElement;
-      if (fileInput) fileInput.value = "";
-      await load(false);
-    } catch (e) {
-      console.error("[resumes] upload failed", e);
-      setErr("Upload failed. Please try again.");
-    } finally {
-      setBusy(false);
+  // ?focus= deep link from board card detail panel.
+  useEffect(() => {
+    if (!focusId) return;
+    if (resumes.some((r) => r.id === focusId)) {
+      setActiveId(focusId);
     }
-  }
+  }, [focusId, resumes]);
 
-  async function onView(resumeId: string) {
-    setErr(null);
-    const res = await fetch(`/api/resumes/${resumeId}/view`, { cache: "no-store" });
-    const data = await safeJson(res);
-    if (!res.ok) { toast(data?.error ?? "View failed", "error"); return; }
-    if (!data?.url) { toast("View failed: missing signed URL", "error"); return; }
-    window.open(data.url, "_blank", "noopener,noreferrer");
-  }
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return resumes.filter((r) => {
+      const tag = deriveTag(r.label);
+      if (tagFilter !== "all" && tag !== tagFilter) return false;
+      if (!q) return true;
+      return (
+        r.label.toLowerCase().includes(q) ||
+        r.filename.toLowerCase().includes(q) ||
+        tag.includes(q)
+      );
+    });
+  }, [resumes, search, tagFilter]);
+
+  const active = useMemo(
+    () => resumes.find((r) => r.id === activeId) ?? null,
+    [resumes, activeId],
+  );
+
+  const validateFile = useCallback((file: File): string | null => {
+    if (file.type !== "application/pdf") return "Only PDF files are allowed";
+    if (file.size > MAX_BYTES) return "PDF must be 2 MB or smaller";
+    if (file.size === 0) return "File is empty";
+    return null;
+  }, []);
+
+  const startUpload = useCallback(
+    async (file: File) => {
+      if (uploading) return;
+      const validationError = validateFile(file);
+      if (validationError) {
+        setUploadError(validationError);
+        toast(validationError, "error");
+        return;
+      }
+      setUploadError(null);
+      setUploadDone(false);
+      setUploadFilename(file.name);
+      setUploading(true);
+
+      try {
+        const fd = new FormData();
+        fd.append("label", defaultLabelFromFilename(file.name));
+        fd.append("file", file);
+        const res = await fetch("/api/resumes", { method: "POST", body: fd });
+        const data = await safeJson(res);
+        if (!res.ok) {
+          const msg = data?.error ?? "Upload failed";
+          setUploadError(msg);
+          toast(msg, "error");
+          setUploading(false);
+          return;
+        }
+        if (data?.item?.id) {
+          newlyCreatedIdRef.current = data.item.id;
+        }
+        setUploadDone(true);
+      } catch (e) {
+        console.error("[resumes] upload failed", e);
+        const msg = e instanceof Error ? e.message : "Upload failed";
+        setUploadError(msg);
+        toast(msg, "error");
+        setUploading(false);
+      }
+    },
+    [toast, uploading, validateFile],
+  );
+
+  const onParseDone = useCallback(() => {
+    setUploading(false);
+    setUploadDone(false);
+    toast("Resume uploaded", "success");
+    load(false);
+  }, [load, toast]);
 
   async function onDelete(resumeId: string) {
-    const prev = items;
-    setItems((cur) => cur.filter((r) => r.id !== resumeId));
+    const target = resumes.find((r) => r.id === resumeId);
+    if (!target) return;
+    const confirmed = window.confirm(
+      `Delete "${target.label}"? This removes the file from storage and detaches it from any applications.`,
+    );
+    if (!confirmed) return;
+
+    const prev = resumes;
+    setResumes((cur) => cur.filter((r) => r.id !== resumeId));
+    if (activeId === resumeId) {
+      const next = prev.find((r) => r.id !== resumeId) ?? null;
+      setActiveId(next?.id ?? null);
+    }
     const res = await fetch(`/api/resumes/${resumeId}`, { method: "DELETE" });
     const data = await safeJson(res);
     if (!res.ok) {
-      setItems(prev);
+      setResumes(prev);
       toast(data?.error ?? "Delete failed", "error");
     } else {
       toast("Resume deleted", "success");
     }
   }
 
+  async function onDownload(resumeId: string) {
+    const res = await fetch(`/api/resumes/${resumeId}/view?download=1`, {
+      cache: "no-store",
+    });
+    const data = await safeJson(res);
+    if (!res.ok || !data?.url) {
+      toast(data?.error ?? "Download failed", "error");
+      return;
+    }
+    window.location.href = data.url;
+  }
+
+  const triggerUploadPicker = () => fileInputRef.current?.click();
+
   return (
-    <div className="space-y-4">
-      <div className="pb-5 border-b border-white/5">
-        <div className="section-index text-purple mb-2">04 / Documents</div>
-        <h1 className="text-2xl font-display text-text-primary">Resumes</h1>
-        <p className="font-data text-[9px] text-text-muted mt-1 uppercase tracking-widest">{items.length} resume{items.length !== 1 ? "s" : ""} uploaded</p>
-      </div>
+    <div className="resumes-page">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/pdf"
+        style={{ display: "none" }}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) startUpload(f);
+          e.target.value = "";
+        }}
+      />
 
-      {/* Upload form */}
-      <Card>
-        <form onSubmit={onUpload} className="space-y-3">
-          <Input
-            label="Label"
-            placeholder="e.g. SDE General v3"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-          />
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] font-medium text-text-muted tracking-[0.1em] uppercase font-data">PDF File</label>
-            <input
-              id="resume-file-input"
-              type="file"
-              accept="application/pdf"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="text-sm text-text-secondary file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border file:border-border file:text-sm file:font-medium file:bg-surface-2 file:text-text-primary hover:file:bg-surface-3 file:cursor-pointer file:transition-colors"
+      {/* Toolbar */}
+      <div className="res-toolbar">
+        <div className="res-toolbar-search">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+            <circle cx="5.5" cy="5.5" r="3.8" stroke="currentColor" strokeWidth="1.4" />
+            <path
+              d="M11.5 11.5L8.5 8.5"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
             />
-            <p className="text-xs text-text-muted">PDF only, max 2 MB</p>
-          </div>
-          <Button type="submit" variant="primary" loading={busy}>
-            Upload Resume
-          </Button>
-          {err && <ErrorBanner message={err} onDismiss={() => setErr(null)} />}
-        </form>
-      </Card>
-
-      {/* Resume list */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="text-text-muted text-sm animate-pulse">Loading resumes...</div>
+          </svg>
+          <input
+            type="text"
+            placeholder="Search resumes…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
-      ) : items.length === 0 ? (
-        <Card className="text-center py-12">
-          <p className="text-lg font-semibold text-text-primary mb-2">No resumes yet</p>
-          <p className="text-sm text-text-muted">Upload a PDF to start attaching resume versions to applications.</p>
-        </Card>
-      ) : (
-        <div className="space-y-2">
-          {items.map((r) => (
-            <Card key={r.id} padding="sm" className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="font-semibold text-text-primary text-sm truncate">{r.label}</p>
-                <p className="text-xs text-text-muted mt-0.5">
-                  {r.filename} &middot; {(r.sizeBytes / 1024).toFixed(0)} KB &middot; {new Date(r.createdAt).toLocaleDateString()}
-                </p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Button variant="secondary" size="sm" onClick={() => onView(r.id)}>View</Button>
-                <Button variant="danger" size="sm" onClick={() => onDelete(r.id)}>Delete</Button>
-              </div>
-            </Card>
+        <div className="res-toolbar-tags">
+          {TAG_PILLS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={`res-tag-pill ${tagFilter === t.id ? "is-active" : ""}`}
+              onClick={() => setTagFilter(t.id)}
+            >
+              {t.label}
+            </button>
           ))}
         </div>
+        <div className="res-toolbar-spacer" />
+        <button
+          type="button"
+          className="res-toolbar-action primary"
+          onClick={triggerUploadPicker}
+          disabled={uploading}
+        >
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M6 2v8M2 6h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+          Upload
+        </button>
+      </div>
+
+      {/* Body */}
+      <div className="res-body">
+        {/* Library */}
+        <aside className="res-library">
+          <div className="res-library-head">
+            <span>
+              {loading
+                ? "Loading…"
+                : `${filtered.length} of ${resumes.length} resume${resumes.length === 1 ? "" : "s"}`}
+            </span>
+          </div>
+          <div className="res-library-list">
+            {filtered.map((r) => (
+              <LibraryCard
+                key={r.id}
+                resume={r}
+                isActive={r.id === activeId}
+                onClick={() => setActiveId(r.id)}
+              />
+            ))}
+            {!loading && resumes.length > 0 && (
+              <button
+                type="button"
+                className="res-card res-card-newvariant"
+                onClick={triggerUploadPicker}
+                disabled={uploading}
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                  <path
+                    d="M6 2v8M2 6h8"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                New variant
+              </button>
+            )}
+            {listError && (
+              <div className="res-sent-empty" style={{ color: "oklch(0.5 0.16 25)" }}>
+                {listError}
+              </div>
+            )}
+          </div>
+        </aside>
+
+        {/* Preview */}
+        <div className="res-preview">
+          {active ? (
+            <>
+              <div className="res-preview-head">
+                <div className="res-preview-title-block">
+                  <div className="res-preview-eyebrow">
+                    Uploaded {relativeTime(active.createdAt)} · {active.filename}
+                  </div>
+                  <h2 className="res-preview-title">{active.label}</h2>
+                </div>
+                <div className="res-preview-actions">
+                  <button
+                    type="button"
+                    className="res-toolbar-action"
+                    onClick={() => onDelete(active.id)}
+                  >
+                    Delete
+                  </button>
+                  <button
+                    type="button"
+                    className="res-toolbar-action primary"
+                    onClick={() => onDownload(active.id)}
+                  >
+                    Download
+                  </button>
+                </div>
+              </div>
+              <div className="res-preview-body">
+                <div className="res-preview-stack">
+                  <PdfPreview key={active.id} resumeId={active.id} />
+                  <SentLog key={active.id} resumeId={active.id} />
+                </div>
+              </div>
+            </>
+          ) : loading ? (
+            <div className="res-preview-empty">
+              <div className="res-preview-empty-title">Loading library…</div>
+            </div>
+          ) : (
+            <DropZone onFile={startUpload} error={uploadError} />
+          )}
+        </div>
+      </div>
+
+      <DragOverlay onDrop={startUpload} disabled={uploading} />
+
+      {uploading && (
+        <ParseAnimation
+          filename={uploadFilename}
+          finished={uploadDone}
+          onDone={onParseDone}
+        />
       )}
     </div>
+  );
+}
+
+export default function ResumesPage() {
+  return (
+    <Suspense fallback={null}>
+      <ResumesView />
+    </Suspense>
   );
 }

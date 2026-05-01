@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useToast } from "@/components/ui/toast";
 import type { BoardColumnType } from "@/lib/board/types";
+import { COLOR_PALETTE, markerColorForColumn } from "@/lib/board/stage-meta";
 
 const inputCls =
   "w-full px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-line)] rounded-md text-[13px] text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-ink)]/10 transition-colors duration-[180ms]";
@@ -20,15 +22,21 @@ export function ColumnManager({ columns: initialColumns, onClose, onChanged }: P
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [colorOpenId, setColorOpenId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        if (pendingDelete) setPendingDelete(null);
+        else if (colorOpenId) setColorOpenId(null);
+        else onClose();
+      }
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, pendingDelete, colorOpenId]);
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -78,18 +86,29 @@ export function ColumnManager({ columns: initialColumns, onClose, onChanged }: P
     }
   }
 
-  async function handleDelete(id: string) {
-    const col = cols.find((c) => c.id === id);
-    if (
-      !confirm(
-        `Delete "${col?.name}"? Applications will be moved to the first column.`
-      )
-    )
-      return;
+  async function handleColor(id: string, color: string | null) {
+    setCols((prev) => prev.map((c) => (c.id === id ? { ...c, color } : c)));
+    setColorOpenId(null);
     try {
       const res = await fetch(`/api/board-columns/${id}`, {
-        method: "DELETE",
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ color }),
       });
+      if (!res.ok) {
+        toast("Failed to update color", "error");
+        return;
+      }
+      onChanged();
+    } catch {
+      toast("Failed to update color", "error");
+    }
+  }
+
+  async function confirmDelete(id: string) {
+    setPendingDelete(null);
+    try {
+      const res = await fetch(`/api/board-columns/${id}`, { method: "DELETE" });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         toast(data?.error ?? "Failed to delete", "error");
@@ -127,17 +146,19 @@ export function ColumnManager({ columns: initialColumns, onClose, onChanged }: P
     }
   }
 
+  const deletingCol = pendingDelete ? cols.find((c) => c.id === pendingDelete) : null;
+
   return (
     <div
       ref={backdropRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
       onClick={(e) => {
         if (e.target === backdropRef.current) onClose();
       }}
     >
       <div
-        className="bg-[var(--color-surface)] border border-[var(--color-line)] rounded-[10px] shadow-lg w-full max-w-[480px] mx-4 max-h-[80vh] flex flex-col"
-        style={{ animation: "fade-up 280ms var(--ease-out-quart) both" }}
+        className="relative bg-[var(--color-surface)] border border-[var(--color-line)] rounded-[10px] shadow-lg w-full max-w-[520px] mx-4 max-h-[80vh] flex flex-col"
+        style={{ animation: "fade-up 180ms ease-out both" }}
       >
         <div className="px-6 pt-5 pb-4 border-b border-[var(--color-line)] flex items-center justify-between">
           <h2 className="text-[18px] font-semibold text-[var(--color-ink)]">
@@ -146,6 +167,7 @@ export function ColumnManager({ columns: initialColumns, onClose, onChanged }: P
           <button
             onClick={onClose}
             className="p-1 text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
+            aria-label="Close"
           >
             <svg
               width="16"
@@ -165,7 +187,7 @@ export function ColumnManager({ columns: initialColumns, onClose, onChanged }: P
           {cols.map((col, i) => (
             <div
               key={col.id}
-              className="flex items-center gap-2 py-2 px-2 rounded-md hover:bg-[var(--color-canvas)] group"
+              className="flex items-center gap-2 py-2 px-2 rounded-md hover:bg-[var(--color-canvas)] group relative"
             >
               {/* Reorder arrows */}
               <div className="flex flex-col gap-0.5">
@@ -175,12 +197,7 @@ export function ColumnManager({ columns: initialColumns, onClose, onChanged }: P
                   className="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] disabled:opacity-20 transition-colors"
                   aria-label="Move up"
                 >
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 10 10"
-                    fill="currentColor"
-                  >
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
                     <path d="M5 2L9 7H1z" />
                   </svg>
                 </button>
@@ -190,16 +207,22 @@ export function ColumnManager({ columns: initialColumns, onClose, onChanged }: P
                   className="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] disabled:opacity-20 transition-colors"
                   aria-label="Move down"
                 >
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 10 10"
-                    fill="currentColor"
-                  >
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
                     <path d="M5 8L1 3h8z" />
                   </svg>
                 </button>
               </div>
+
+              {/* Color swatch trigger */}
+              <button
+                type="button"
+                onClick={() =>
+                  setColorOpenId((cur) => (cur === col.id ? null : col.id))
+                }
+                aria-label="Change color"
+                className="w-4 h-4 rounded-[3px] border border-[var(--color-line)] hover:border-[var(--color-ink)] transition-colors flex-shrink-0"
+                style={{ background: markerColorForColumn(col) }}
+              />
 
               {/* Name (editable) */}
               {editingId === col.id ? (
@@ -231,14 +254,12 @@ export function ColumnManager({ columns: initialColumns, onClose, onChanged }: P
                 </span>
               )}
 
-              {/* Count */}
               <span className="font-mono text-[10px] tabular-nums text-[var(--color-ink-muted)]">
                 {col.applicationCount}
               </span>
 
-              {/* Delete */}
               <button
-                onClick={() => handleDelete(col.id)}
+                onClick={() => setPendingDelete(col.id)}
                 className="p-1 text-[var(--color-ink-muted)] opacity-0 group-hover:opacity-100 hover:text-[var(--color-sink)] transition-all"
                 aria-label={`Delete ${col.name}`}
               >
@@ -254,6 +275,39 @@ export function ColumnManager({ columns: initialColumns, onClose, onChanged }: P
                   <path d="M3 3l6 6M9 3l-6 6" />
                 </svg>
               </button>
+
+              {/* Color picker popover */}
+              {colorOpenId === col.id && (
+                <div
+                  className="absolute left-12 top-full mt-1 z-10 p-3 bg-[var(--color-surface)] border border-[var(--color-line)] rounded-md shadow-lg"
+                  style={{ minWidth: 200 }}
+                >
+                  <div className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-ink-muted)] mb-2">
+                    Column color
+                  </div>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {COLOR_PALETTE.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        title={p.label}
+                        onClick={() => handleColor(col.id, p.value)}
+                        className="w-6 h-6 rounded-[4px] border border-[var(--color-line)] hover:scale-110 transition-transform"
+                        style={{ background: p.value }}
+                      />
+                    ))}
+                  </div>
+                  {col.color && (
+                    <button
+                      type="button"
+                      onClick={() => handleColor(col.id, null)}
+                      className="mt-2 w-full font-mono text-[10px] text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] transition-colors py-1"
+                    >
+                      Reset to default
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -278,7 +332,47 @@ export function ColumnManager({ columns: initialColumns, onClose, onChanged }: P
             </button>
           </form>
         </div>
+
       </div>
+
+      {typeof document !== "undefined" && deletingCol &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40"
+            onClick={() => setPendingDelete(null)}
+          >
+            <div
+              className="bg-[var(--color-surface)] border border-[var(--color-line)] rounded-md shadow-lg p-5 w-[88%] max-w-[420px]"
+              onClick={(e) => e.stopPropagation()}
+              style={{ animation: "fade-up 160ms ease-out both" }}
+            >
+              <h3 className="text-[14px] font-semibold text-[var(--color-ink)] mb-1">
+                Delete &ldquo;{deletingCol.name}&rdquo;?
+              </h3>
+              <p className="text-[12px] text-[var(--color-ink-muted)] mb-4">
+                Applications in this column will move to the first column.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPendingDelete(null)}
+                  className="px-3 py-1.5 text-[12px] font-mono text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => confirmDelete(deletingCol.id)}
+                  className="px-3 py-1.5 text-[12px] font-mono text-white rounded-md"
+                  style={{ background: "oklch(0.55 0.13 30)" }}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

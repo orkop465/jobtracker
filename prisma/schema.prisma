@@ -150,6 +150,9 @@ model Application {
 
   boardColumnId String?
   boardColumn   BoardColumn? @relation(fields: [boardColumnId], references: [id], onDelete: SetNull)
+  // Sort order within boardColumn. Float lets us insert between two cards
+  // without renumbering siblings (use midpoint between neighbors).
+  position      Float    @default(0)
 
   salaryMin       Int?
   salaryMax       Int?
@@ -187,6 +190,7 @@ model BoardColumn {
   name         String
   position     Int
   mappedStatus ApplicationStatus?
+  color        String?
   applications Application[]
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt

@@ -22,6 +22,7 @@ export async function GET() {
       name: c.name,
       position: c.position,
       mappedStatus: c.mappedStatus,
+      color: c.color,
       applicationCount: c._count.applications,
     })),
   });
@@ -59,6 +60,7 @@ export async function POST(req: Request) {
         name: column.name,
         position: column.position,
         mappedStatus: null,
+        color: null,
         applicationCount: 0,
       },
     },

@@ -24,7 +24,7 @@ steps:
   - id: Install deps
     name: node:20-slim
     env:
-      - 'DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/placeholder'
+      - "DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/placeholder"
     entrypoint: bash
     args:
       - -c

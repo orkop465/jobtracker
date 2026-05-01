@@ -1,8 +1,46 @@
 import { NextResponse } from "next/server";
 import type { ApplicationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import { auth } from "@/auth";
+
+const FIELD_LABELS: Record<string, string> = {
+  company: "Company",
+  roleTitle: "Role title",
+  jobUrl: "Job URL",
+  location: "Location",
+  status: "Status",
+  appliedAt: "Applied date",
+  resumeId: "Resume",
+  salaryMin: "Min salary",
+  salaryMax: "Max salary",
+  currency: "Currency",
+  contactName: "Contact name",
+  contactEmail: "Contact email",
+  contactLinkedIn: "Contact LinkedIn",
+  notes: "Notes",
+  source: "Source",
+  jobDescription: "Job description",
+  priority: "Priority",
+  nextFollowUp: "Follow-up date",
+};
+
+function formatError(err: unknown): string {
+  if (err instanceof ZodError) {
+    const first = err.issues[0];
+    if (!first) return "Invalid input";
+    const fieldKey = first.path[0];
+    const label =
+      typeof fieldKey === "string" && FIELD_LABELS[fieldKey]
+        ? FIELD_LABELS[fieldKey]
+        : typeof fieldKey === "string"
+        ? fieldKey
+        : "Input";
+    return `${label}: ${first.message}`;
+  }
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
 
 const StatusEnum = z.enum([
   "APPLIED",
@@ -33,28 +71,56 @@ const PriorityEnum = z.enum(["LOW", "MEDIUM", "HIGH"]);
 
 const CreateApplicationSchema = z
   .object({
-    company: z.string().min(1).max(120),
-    roleTitle: z.string().min(1).max(160),
-    jobUrl: z.string().url().optional().or(z.literal("")),
-    location: z.string().max(120).optional().or(z.literal("")),
+    company: z.string().min(1, "is required").max(120, "is too long"),
+    roleTitle: z.string().min(1, "is required").max(160, "is too long"),
+    jobUrl: z
+      .string()
+      .url("must be a full URL like https://example.com")
+      .optional()
+      .or(z.literal("")),
+    location: z.string().max(120, "is too long").optional().or(z.literal("")),
     status: StatusEnum.optional(),
-    appliedAt: z.string().datetime().optional(),
+    appliedAt: z.string().datetime("must be a valid date").optional(),
     resumeId: z.string().optional().or(z.literal("")),
-    salaryMin: z.number().int().min(0).optional(),
-    salaryMax: z.number().int().min(0).optional(),
-    currency: z.string().max(3).optional(),
-    contactName: z.string().max(120).optional().or(z.literal("")),
-    contactEmail: z.string().email().optional().or(z.literal("")),
-    contactLinkedIn: z.string().max(500).optional().or(z.literal("")),
-    notes: z.string().max(10000).optional().or(z.literal("")),
+    salaryMin: z
+      .number()
+      .int("must be a whole number")
+      .min(0, "cannot be negative")
+      .optional(),
+    salaryMax: z
+      .number()
+      .int("must be a whole number")
+      .min(0, "cannot be negative")
+      .optional(),
+    currency: z.string().max(3, "must be a 3-letter code").optional(),
+    contactName: z.string().max(120, "is too long").optional().or(z.literal("")),
+    contactEmail: z
+      .string()
+      .email("must be a valid email")
+      .optional()
+      .or(z.literal("")),
+    contactLinkedIn: z.string().max(500, "is too long").optional().or(z.literal("")),
+    notes: z
+      .string()
+      .max(10000, "exceeds 10,000 characters")
+      .optional()
+      .or(z.literal("")),
     source: SourceEnum.optional(),
-    jobDescription: z.string().max(50000).optional().or(z.literal("")),
+    jobDescription: z
+      .string()
+      .max(50000, "exceeds 50,000 characters")
+      .optional()
+      .or(z.literal("")),
     priority: PriorityEnum.optional(),
-    nextFollowUp: z.string().datetime().optional().or(z.literal("")),
+    nextFollowUp: z
+      .string()
+      .datetime("must be a valid date")
+      .optional()
+      .or(z.literal("")),
   })
   .refine(
     (d) => !(d.salaryMin != null && d.salaryMax != null && d.salaryMin > d.salaryMax),
-    { message: "salaryMin must not exceed salaryMax", path: ["salaryMin"] }
+    { message: "must not exceed Max salary", path: ["salaryMin"] },
   );
 
 export async function GET() {
@@ -167,9 +233,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ item: created }, { status: 201 });
   } catch (err: unknown) {
     // Keep errors consistent and JSON-parse-safe on the client.
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : String(err) },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: formatError(err) }, { status: 400 });
   }
 }

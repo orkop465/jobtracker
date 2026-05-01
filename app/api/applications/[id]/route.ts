@@ -1,15 +1,58 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { Prisma } from "@prisma/client";
+import { Prisma, type ApplicationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import { auth } from "@/auth";
+
+const FIELD_LABELS: Record<string, string> = {
+  company: "Company",
+  roleTitle: "Role title",
+  jobUrl: "Job URL",
+  location: "Location",
+  status: "Status",
+  appliedAt: "Applied date",
+  resumeId: "Resume",
+  salaryMin: "Min salary",
+  salaryMax: "Max salary",
+  currency: "Currency",
+  contactName: "Contact name",
+  contactEmail: "Contact email",
+  contactLinkedIn: "Contact LinkedIn",
+  notes: "Notes",
+  source: "Source",
+  jobDescription: "Job description",
+  priority: "Priority",
+  nextFollowUp: "Follow-up date",
+  boardColumnId: "Board column",
+};
+
+function formatError(err: unknown): string {
+  if (err instanceof ZodError) {
+    const first = err.issues[0];
+    if (!first) return "Invalid input";
+    const fieldKey = first.path[0];
+    const label =
+      typeof fieldKey === "string" && FIELD_LABELS[fieldKey]
+        ? FIELD_LABELS[fieldKey]
+        : typeof fieldKey === "string"
+        ? fieldKey
+        : "Input";
+    return `${label}: ${first.message}`;
+  }
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
 
 const UpdateApplicationSchema = z
   .object({
-    company: z.string().min(1).max(120).optional(),
-    roleTitle: z.string().min(1).max(160).optional(),
-    jobUrl: z.string().url().optional().or(z.literal("")),
-    location: z.string().max(120).optional().or(z.literal("")),
+    company: z.string().min(1, "is required").max(120, "is too long").optional(),
+    roleTitle: z.string().min(1, "is required").max(160, "is too long").optional(),
+    jobUrl: z
+      .string()
+      .url("must be a full URL like https://example.com")
+      .optional()
+      .or(z.literal("")),
+    location: z.string().max(120, "is too long").optional().or(z.literal("")),
     status: z
       .enum([
         "APPLIED",
@@ -24,15 +67,29 @@ const UpdateApplicationSchema = z
         "GHOSTED",
       ])
       .optional(),
-    appliedAt: z.string().datetime().optional(),
+    appliedAt: z.string().datetime("must be a valid date").optional(),
     resumeId: z.string().optional().or(z.literal("")),
-    salaryMin: z.number().int().min(0).optional().nullable(),
-    salaryMax: z.number().int().min(0).optional().nullable(),
-    currency: z.string().max(3).optional().or(z.literal("")),
-    contactName: z.string().max(120).optional().or(z.literal("")),
-    contactEmail: z.string().email().optional().or(z.literal("")),
-    contactLinkedIn: z.string().max(500).optional().or(z.literal("")),
-    notes: z.string().max(10000).optional().or(z.literal("")),
+    salaryMin: z
+      .number()
+      .int("must be a whole number")
+      .min(0, "cannot be negative")
+      .optional()
+      .nullable(),
+    salaryMax: z
+      .number()
+      .int("must be a whole number")
+      .min(0, "cannot be negative")
+      .optional()
+      .nullable(),
+    currency: z.string().max(3, "must be a 3-letter code").optional().or(z.literal("")),
+    contactName: z.string().max(120, "is too long").optional().or(z.literal("")),
+    contactEmail: z
+      .string()
+      .email("must be a valid email")
+      .optional()
+      .or(z.literal("")),
+    contactLinkedIn: z.string().max(500, "is too long").optional().or(z.literal("")),
+    notes: z.string().max(10000, "exceeds 10,000 characters").optional().or(z.literal("")),
     source: z
       .enum([
         "LINKEDIN",
@@ -47,15 +104,25 @@ const UpdateApplicationSchema = z
       ])
       .optional()
       .nullable(),
-    jobDescription: z.string().max(50000).optional().or(z.literal("")),
+    jobDescription: z
+      .string()
+      .max(50000, "exceeds 50,000 characters")
+      .optional()
+      .or(z.literal("")),
     priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional().nullable(),
-    nextFollowUp: z.string().datetime().optional().or(z.literal("")).nullable(),
+    nextFollowUp: z
+      .string()
+      .datetime("must be a valid date")
+      .optional()
+      .or(z.literal(""))
+      .nullable(),
     boardColumnId: z.string().optional().nullable(),
+    position: z.number().optional().nullable(),
   })
   .strict()
   .refine(
     (d) => !(d.salaryMin != null && d.salaryMax != null && d.salaryMin > d.salaryMax),
-    { message: "salaryMin must not exceed salaryMax", path: ["salaryMin"] }
+    { message: "must not exceed Max salary", path: ["salaryMin"] },
   );
 
 async function getUserIdOrNull() {
@@ -135,6 +202,10 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       data.nextFollowUp = parsed.nextFollowUp ? new Date(parsed.nextFollowUp) : null;
     }
 
+    if (parsed.position !== undefined && parsed.position !== null) {
+      data.position = parsed.position;
+    }
+
     // Race-safe update: read the current row inside the transaction and
     // condition the write on the exact status we observed. If two PATCHes
     // race, only one matches the conditional updateMany — the loser gets
@@ -142,11 +213,11 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     const result = await prisma.$transaction(async (tx) => {
       const current = await tx.application.findFirst({
         where: { id, userId },
-        select: { id: true, status: true },
+        select: { id: true, status: true, boardColumnId: true },
       });
       if (!current) return { ok: false as const, reason: "not_found" };
 
-      // Board column move
+      // Board column move (explicit)
       if (parsed.boardColumnId !== undefined) {
         if (parsed.boardColumnId) {
           const targetCol = await tx.boardColumn.findFirst({
@@ -165,6 +236,24 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
         }
       }
 
+      // Status-only change: keep boardColumnId in sync. If the status
+      // change came from the form (not from a column move), find the
+      // column whose mappedStatus matches the new status and move the
+      // card there. This makes status the single source of truth from
+      // the user's perspective — they pick a status, the column
+      // follows automatically.
+      if (
+        data.status &&
+        data.status !== current.status &&
+        data.boardColumnId === undefined
+      ) {
+        const targetCol = await tx.boardColumn.findFirst({
+          where: { userId, mappedStatus: data.status as ApplicationStatus },
+          orderBy: { position: "asc" },
+        });
+        if (targetCol) data.boardColumnId = targetCol.id;
+      }
+
       const statusChanged = data.status && data.status !== current.status;
 
       // Conditional write — must include the observed status so a concurrent
@@ -177,12 +266,15 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       if (updated.count !== 1) return { ok: false as const, reason: "conflict" };
 
       if (statusChanged) {
+        // Use data.status (not parsed.status) — status may have been derived
+        // from a boardColumnId change rather than an explicit status field
+        // on the request body.
         await tx.applicationStatusEvent.create({
           data: {
             userId,
             applicationId: id,
             fromStatus: current.status,
-            toStatus: parsed.status!,
+            toStatus: data.status as ApplicationStatus,
           },
         });
       }
@@ -220,10 +312,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
     return NextResponse.json({ item });
   } catch (err: unknown) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : String(err) },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: formatError(err) }, { status: 400 });
   }
 }
 

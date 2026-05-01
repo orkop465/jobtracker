@@ -300,9 +300,9 @@ export const JOURNEY_OUTCOME_THRESHOLDS = {
 
 /** Timing — milliseconds for each phase of the animation */
 export const JOURNEY_TIMING = {
-  holdMs:             5500,   // time at each non-final stage
+  holdMs:             4500,   // time at each non-final stage
   transitionMs:       800,    // crossfade between stages
-  finalOfferHoldMs:   5000,   // hold at offer with green glow
-  finalRejectHoldMs:  4500,   // hold with rejection banner visible
-  betweenMs:          2500,   // loading spinner between episodes
+  finalOfferHoldMs:   4000,   // hold at offer with green glow
+  finalRejectHoldMs:  3500,   // hold with rejection banner visible
+  betweenMs:          2000,   // loading spinner between episodes
 };
