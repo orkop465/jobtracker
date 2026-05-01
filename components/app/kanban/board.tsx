@@ -266,48 +266,47 @@ export function KanbanBoard() {
   // that flipping caused visual oscillation during same-column drags.
   const collisionDetection: CollisionDetection = useCallback(
     (args) => {
+      // Pointer-based hit test only. If the cursor isn't inside ANY
+      // droppable (e.g., in the gap between two columns), pin `over`
+      // to the active card itself — handleDragOver short-circuits when
+      // active === over, so state freezes at the last in-column slot
+      // and the in-place ghost stays consistent with the eventual
+      // drop. Falling back to rectIntersection or `lastOverId` here
+      // would let dragOver keep mutating state with stale `over` while
+      // the cursor sits in the gap, causing the "ghost in one spot,
+      // card lands in another" desync at release.
       const pointerCollisions = pointerWithin(args);
-      const intersections =
-        pointerCollisions.length > 0
-          ? pointerCollisions
-          : rectIntersection(args);
+      if (pointerCollisions.length === 0) {
+        return args.active ? [{ id: args.active.id }] : [];
+      }
 
-      let overId = getFirstCollision(intersections, "id");
-
+      let overId = getFirstCollision(pointerCollisions, "id");
       if (overId == null) {
-        if (recentlyMovedToNewColumn.current) {
-          // Active just landed in a new column. Pin to the active id
-          // until the cursor moves enough to register a fresh collision —
-          // prevents dragEnd from seeing over=null and bailing.
-          overId = args.active?.id ?? lastOverId.current;
-        } else {
-          overId = lastOverId.current;
-        }
+        return args.active ? [{ id: args.active.id }] : [];
       }
 
-      if (overId != null) {
-        const overIsColumn = columns.some((c) => c.id === overId);
-        if (overIsColumn) {
-          const colCards = colAppsByCol.get(String(overId)) ?? [];
-          const cardIds = colCards.map((c) => c.id);
-          if (cardIds.length > 0) {
-            const closest = closestCenter({
-              ...args,
-              droppableContainers: args.droppableContainers.filter(
-                (container) =>
-                  container.id !== overId &&
-                  cardIds.includes(String(container.id)),
-              ),
-            });
-            const cardOver = getFirstCollision(closest, "id");
-            if (cardOver != null) overId = cardOver;
-          }
+      // Resolve a column hit to the closest card inside that column,
+      // so the visual gap from verticalListSortingStrategy always
+      // anchors to a card slot.
+      const overIsColumn = columns.some((c) => c.id === overId);
+      if (overIsColumn) {
+        const colCards = colAppsByCol.get(String(overId)) ?? [];
+        const cardIds = colCards.map((c) => c.id);
+        if (cardIds.length > 0) {
+          const closest = closestCenter({
+            ...args,
+            droppableContainers: args.droppableContainers.filter(
+              (container) =>
+                container.id !== overId &&
+                cardIds.includes(String(container.id)),
+            ),
+          });
+          const cardOver = getFirstCollision(closest, "id");
+          if (cardOver != null) overId = cardOver;
         }
-        lastOverId.current = overId;
-        return [{ id: overId }];
       }
-
-      return [];
+      lastOverId.current = overId;
+      return [{ id: overId }];
     },
     [columns, colAppsByCol],
   );
