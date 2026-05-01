@@ -676,6 +676,22 @@ export function KanbanBoard() {
 
     if (!over) return;
 
+    // Released in the inter-column gap (cursor outside any droppable).
+    // collisionDetection pins over=active.id in that case. Treat as
+    // "cancel" — revert state to the original snapshot and skip PATCH,
+    // matching standard kanban UX (Trello/Linear). Without this, any
+    // mid-drag mutations dragOver applied (e.g., active inserted into
+    // a column the user briefly hovered) would persist on release.
+    if (String(over.id) === activeId) {
+      if (original) {
+        const snapshot = original;
+        setApps((prev) =>
+          prev.map((a) => (a.id === activeId ? { ...snapshot } : a)),
+        );
+      }
+      return;
+    }
+
     const { targetColumnId: resolvedColumnId, overCardId } = resolveTarget(over);
     const targetColumnId =
       resolvedColumnId ?? original?.boardColumnId ?? null;
