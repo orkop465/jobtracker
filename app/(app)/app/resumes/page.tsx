@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useToast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { LibraryCard } from "@/components/app/resumes/library-card";
 import { DropZone } from "@/components/app/resumes/dropzone";
 import { ParseAnimation } from "@/components/app/resumes/parse-animation";
@@ -179,13 +180,17 @@ function ResumesView() {
     load(false);
   }, [load, toast]);
 
-  async function onDelete(resumeId: string) {
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
+  const requestDelete = (resumeId: string) => setPendingDeleteId(resumeId);
+
+  const performDelete = useCallback(async () => {
+    const resumeId = pendingDeleteId;
+    if (!resumeId) return;
+    setPendingDeleteId(null);
+
     const target = resumes.find((r) => r.id === resumeId);
     if (!target) return;
-    const confirmed = window.confirm(
-      `Delete "${target.label}"? This removes the file from storage and detaches it from any applications.`,
-    );
-    if (!confirmed) return;
 
     const prev = resumes;
     setResumes((cur) => cur.filter((r) => r.id !== resumeId));
@@ -201,7 +206,7 @@ function ResumesView() {
     } else {
       toast("Resume deleted", "success");
     }
-  }
+  }, [activeId, pendingDeleteId, resumes, toast]);
 
   async function onDownload(resumeId: string) {
     const res = await fetch(`/api/resumes/${resumeId}/view?download=1`, {
@@ -337,7 +342,7 @@ function ResumesView() {
                   <button
                     type="button"
                     className="res-toolbar-action"
-                    onClick={() => onDelete(active.id)}
+                    onClick={() => requestDelete(active.id)}
                   >
                     Delete
                   </button>
@@ -376,6 +381,19 @@ function ResumesView() {
           onDone={onParseDone}
         />
       )}
+
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        title="Delete this resume?"
+        body={(() => {
+          const t = resumes.find((r) => r.id === pendingDeleteId);
+          return t
+            ? `${t.label}. This removes the file from storage and detaches it from any applications.`
+            : "";
+        })()}
+        onConfirm={performDelete}
+        onCancel={() => setPendingDeleteId(null)}
+      />
     </div>
   );
 }
