@@ -8,6 +8,13 @@ export type Resume = {
   gcsPath: string;
   sentCount: number;
   lastAppliedAt: string | null;
+  tags: ResumeTag[];
+};
+
+export type ResumeTag = {
+  id: string;
+  name: string;
+  color: string | null;
 };
 
 export type SentApplication = {
@@ -17,23 +24,6 @@ export type SentApplication = {
   status: string;
   appliedAt: string;
 };
-
-export type DerivedTag = "swe" | "pm" | "design" | "data" | "ml" | "other";
-
-const TAG_PATTERNS: { tag: DerivedTag; rx: RegExp }[] = [
-  { tag: "ml", rx: /\b(ml|machine\s?learning|ai|llm|nlp|recsys)\b/i },
-  { tag: "data", rx: /\b(data|analyst|analytics|scientist)\b/i },
-  { tag: "design", rx: /\b(design|ux|ui)\b/i },
-  { tag: "pm", rx: /\b(pm|product\s?manager|product)\b/i },
-  { tag: "swe", rx: /\b(swe|sde|engineer|frontend|backend|fullstack|full-stack|developer|software)\b/i },
-];
-
-export function deriveTag(label: string): DerivedTag {
-  for (const { tag, rx } of TAG_PATTERNS) {
-    if (rx.test(label)) return tag;
-  }
-  return "other";
-}
 
 export function relativeTime(iso: string | null): string {
   if (!iso) return "—";

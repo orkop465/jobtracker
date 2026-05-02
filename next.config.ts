@@ -21,13 +21,15 @@ const SECURITY_HEADERS = [
       "img-src 'self' data: blob: https:",
       // Resume signed-URL fetches go to storage.googleapis.com.
       "connect-src 'self' https://storage.googleapis.com https://www.google.com",
-      "frame-ancestors 'none'",
+      // 'self' lets our same-origin PDF preview iframe load
+      // /api/resumes/[id]/view/file. Third-party framing stays blocked.
+      "frame-ancestors 'self'",
       "base-uri 'self'",
       "form-action 'self'",
       "object-src 'none'",
     ].join("; "),
   },
-  { key: "X-Frame-Options", value: "DENY" },
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   {

@@ -36,6 +36,9 @@ export async function GET() {
     take: 500,
     include: {
       _count: { select: { applications: true } },
+      tags: {
+        include: { tag: true },
+      },
     },
   });
 
@@ -68,6 +71,11 @@ export async function GET() {
     gcsPath: r.gcsPath,
     sentCount: r._count.applications,
     lastAppliedAt: lastByResume.get(r.id) ?? null,
+    tags: r.tags.map((rt) => ({
+      id: rt.tag.id,
+      name: rt.tag.name,
+      color: rt.tag.color,
+    })),
   }));
 
   return NextResponse.json({ items });
@@ -136,7 +144,23 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({ item: created }, { status: 201 });
+    return NextResponse.json(
+      {
+        item: {
+          id: created.id,
+          label: created.label,
+          filename: created.filename,
+          mimeType: created.mimeType,
+          sizeBytes: created.sizeBytes,
+          createdAt: created.createdAt,
+          gcsPath: created.gcsPath,
+          sentCount: 0,
+          lastAppliedAt: null,
+          tags: [],
+        },
+      },
+      { status: 201 },
+    );
   } catch (err: unknown) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },

@@ -3,6 +3,7 @@ import { Fraunces, Inter_Tight, JetBrains_Mono } from "next/font/google";
 import { SidebarNav } from "@/components/app/sidebar-nav";
 import { Topbar } from "@/components/app/topbar";
 import { ToastProvider } from "@/components/ui/toast";
+import { QuickAddProvider } from "@/components/app/quick-add-context";
 import "@/styles/design/base.css";
 
 const fraunces = Fraunces({
@@ -36,18 +37,20 @@ export default async function AppLayout({
 
   return (
     <ToastProvider>
-      <div
-        className={`${fraunces.variable} ${interTight.variable} ${jetbrainsMono.variable} app-shell-root`}
-      >
-        <SidebarNav
-          userEmail={session?.user?.email}
-          userName={session?.user?.name}
-        />
-        <div className="app-main">
-          <Topbar />
-          <div className="app-content">{children}</div>
+      <QuickAddProvider>
+        <div
+          className={`${fraunces.variable} ${interTight.variable} ${jetbrainsMono.variable} app-shell-root`}
+        >
+          <SidebarNav
+            userEmail={session?.user?.email}
+            userName={session?.user?.name}
+          />
+          <div className="app-main">
+            <Topbar />
+            <div className="app-content">{children}</div>
+          </div>
         </div>
-      </div>
+      </QuickAddProvider>
     </ToastProvider>
   );
 }

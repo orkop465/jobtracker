@@ -1,55 +1,78 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface Props {
   resumeId: string;
 }
 
+const LOAD_TIMEOUT_MS = 10_000;
+
 /**
- * Renders the active resume as an iframe of a freshly minted signed URL.
- * The parent should use `key={resumeId}` so the component remounts on
- * resume switch — that gives us a clean initial render without needing
- * to synchronously reset state inside the effect body.
+ * Renders the active resume in an iframe pointed at our same-origin proxy.
+ * The proxy enforces auth + ownership server-side and streams the GCS object
+ * with `Content-Disposition: inline`, so the browser embeds the PDF without
+ * the cross-origin block the prior signed-URL flow tripped.
  */
 export function PdfPreview({ resumeId }: Props) {
-  const [state, setState] = useState<{ url: string | null; error: string | null }>({
-    url: null,
-    error: null,
-  });
+  const [retryKey, setRetryKey] = useState(0);
+
+  return (
+    <PdfPreviewAttempt
+      key={`${resumeId}-${retryKey}`}
+      resumeId={resumeId}
+      onRetry={() => setRetryKey((k) => k + 1)}
+    />
+  );
+}
+
+interface AttemptProps {
+  resumeId: string;
+  onRetry: () => void;
+}
+
+/**
+ * One load attempt. Remounted (via key) by the parent on retry so the iframe
+ * tries again from scratch and timeout/loaded state initialize fresh — avoids
+ * in-effect setState resets that violate react-hooks/set-state-in-effect.
+ */
+function PdfPreviewAttempt({ resumeId, onRetry }: AttemptProps) {
+  const [loaded, setLoaded] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
+  const loadedRef = useRef(false);
 
   useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const res = await fetch(`/api/resumes/${resumeId}/view`, { cache: "no-store" });
-        const data = await res.json().catch(() => null);
-        if (cancelled) return;
-        if (!res.ok || !data?.url) {
-          setState({ url: null, error: data?.error ?? "Failed to load PDF" });
-          return;
-        }
-        setState({ url: data.url, error: null });
-      } catch (e) {
-        if (!cancelled) {
-          setState({ url: null, error: e instanceof Error ? e.message : "Failed to load PDF" });
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [resumeId]);
+    const t = setTimeout(() => {
+      if (!loadedRef.current) setTimedOut(true);
+    }, LOAD_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
     <div className="res-pdf-frame-wrap">
-      {state.url ? (
-        <iframe className="res-pdf-frame" src={state.url} title="Resume preview" />
-      ) : (
-        <div className="res-pdf-loading">{state.error ?? "Loading preview…"}</div>
+      {!loaded && !timedOut && <div className="res-pdf-loading">Loading preview…</div>}
+      {timedOut && !loaded && (
+        <div className="res-pdf-loading">
+          Could not load preview.{" "}
+          <button
+            type="button"
+            onClick={onRetry}
+            style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", color: "inherit" }}
+          >
+            Retry
+          </button>
+        </div>
       )}
+      <iframe
+        className="res-pdf-frame"
+        src={`/api/resumes/${resumeId}/view/file`}
+        title="Resume preview"
+        onLoad={() => {
+          loadedRef.current = true;
+          setLoaded(true);
+        }}
+        style={{ visibility: loaded ? "visible" : "hidden" }}
+      />
     </div>
   );
 }

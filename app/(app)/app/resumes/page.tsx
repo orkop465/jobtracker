@@ -3,29 +3,22 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useToast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { LibraryCard } from "@/components/app/resumes/library-card";
 import { DropZone } from "@/components/app/resumes/dropzone";
 import { ParseAnimation } from "@/components/app/resumes/parse-animation";
 import { PdfPreview } from "@/components/app/resumes/pdf-preview";
 import { SentLog } from "@/components/app/resumes/sent-log";
 import { DragOverlay } from "@/components/app/resumes/drag-overlay";
+import { ResumeContextMenu } from "@/components/app/resumes/resume-context-menu";
+import { ResumeTagManager } from "@/components/app/resumes/resume-tag-manager";
 import {
-  deriveTag,
   relativeTime,
-  type DerivedTag,
   type Resume,
+  type ResumeTag,
 } from "@/components/app/resumes/types";
 
-type TagFilter = "all" | DerivedTag;
-
-const TAG_PILLS: { id: TagFilter; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "swe", label: "SWE" },
-  { id: "pm", label: "PM" },
-  { id: "design", label: "Design" },
-  { id: "data", label: "Data" },
-  { id: "ml", label: "ML" },
-];
+type TagFilter = "all" | string;
 
 const MAX_BYTES = 2 * 1024 * 1024;
 
@@ -52,6 +45,12 @@ function ResumesView() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
+
+  const [tags, setTags] = useState<ResumeTag[]>([]);
+  const [showTagManager, setShowTagManager] = useState(false);
+  const [contextMenu, setContextMenu] = useState<
+    { x: number; y: number; resumeId: string } | null
+  >(null);
 
   // Upload flow state
   const [uploading, setUploading] = useState(false);
@@ -92,9 +91,23 @@ function ResumesView() {
     }
   }, []);
 
+  const loadTags = useCallback(async () => {
+    try {
+      const res = await fetch("/api/resume-tags", { cache: "no-store" });
+      const data = await safeJson(res);
+      if (res.ok) setTags(data?.tags ?? []);
+    } catch {
+      /* silent — toolbar just shows All only */
+    }
+  }, []);
+
   useEffect(() => {
     load(true);
   }, [load]);
+
+  useEffect(() => {
+    loadTags();
+  }, [loadTags]);
 
   // ?focus= deep link from board card detail panel.
   useEffect(() => {
@@ -107,13 +120,12 @@ function ResumesView() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return resumes.filter((r) => {
-      const tag = deriveTag(r.label);
-      if (tagFilter !== "all" && tag !== tagFilter) return false;
+      if (tagFilter !== "all" && !r.tags.some((t) => t.id === tagFilter)) return false;
       if (!q) return true;
       return (
         r.label.toLowerCase().includes(q) ||
         r.filename.toLowerCase().includes(q) ||
-        tag.includes(q)
+        r.tags.some((t) => t.name.toLowerCase().includes(q))
       );
     });
   }, [resumes, search, tagFilter]);
@@ -179,29 +191,83 @@ function ResumesView() {
     load(false);
   }, [load, toast]);
 
-  async function onDelete(resumeId: string) {
-    const target = resumes.find((r) => r.id === resumeId);
-    if (!target) return;
-    const confirmed = window.confirm(
-      `Delete "${target.label}"? This removes the file from storage and detaches it from any applications.`,
-    );
-    if (!confirmed) return;
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-    const prev = resumes;
-    setResumes((cur) => cur.filter((r) => r.id !== resumeId));
-    if (activeId === resumeId) {
-      const next = prev.find((r) => r.id !== resumeId) ?? null;
-      setActiveId(next?.id ?? null);
+  const requestDelete = useCallback(
+    (resumeId: string) => setPendingDeleteId(resumeId),
+    [],
+  );
+
+  const performDelete = useCallback(async () => {
+    const resumeId = pendingDeleteId;
+    if (!resumeId || deleting) return;
+
+    const target = resumes.find((r) => r.id === resumeId);
+    if (!target) {
+      setPendingDeleteId(null);
+      return;
     }
-    const res = await fetch(`/api/resumes/${resumeId}`, { method: "DELETE" });
-    const data = await safeJson(res);
-    if (!res.ok) {
-      setResumes(prev);
-      toast(data?.error ?? "Delete failed", "error");
-    } else {
+
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/resumes/${resumeId}`, { method: "DELETE" });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        toast(data?.error ?? "Delete failed", "error");
+        return;
+      }
+      setResumes((cur) => cur.filter((r) => r.id !== resumeId));
+      if (activeId === resumeId) {
+        const next = resumes.find((r) => r.id !== resumeId) ?? null;
+        setActiveId(next?.id ?? null);
+      }
       toast("Resume deleted", "success");
+      setPendingDeleteId(null);
+    } finally {
+      setDeleting(false);
     }
-  }
+  }, [activeId, deleting, pendingDeleteId, resumes, toast]);
+
+  const toggleTag = useCallback(
+    async (resumeId: string, tagId: string) => {
+      const target = resumes.find((r) => r.id === resumeId);
+      if (!target) return;
+      const has = target.tags.some((t) => t.id === tagId);
+      const nextIds = has
+        ? target.tags.filter((t) => t.id !== tagId).map((t) => t.id)
+        : [...target.tags.map((t) => t.id), tagId];
+
+      const prev = resumes;
+      const tagObj = tags.find((t) => t.id === tagId);
+      setResumes((cur) =>
+        cur.map((r) =>
+          r.id === resumeId
+            ? {
+                ...r,
+                tags: has
+                  ? r.tags.filter((t) => t.id !== tagId)
+                  : tagObj
+                  ? [...r.tags, tagObj]
+                  : r.tags,
+              }
+            : r,
+        ),
+      );
+
+      const res = await fetch(`/api/resumes/${resumeId}/tags`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tagIds: nextIds }),
+      });
+      if (!res.ok) {
+        setResumes(prev);
+        const data = await safeJson(res);
+        toast(data?.error ?? "Failed to update tags", "error");
+      }
+    },
+    [resumes, tags, toast],
+  );
 
   async function onDownload(resumeId: string) {
     const res = await fetch(`/api/resumes/${resumeId}/view?download=1`, {
@@ -251,16 +317,35 @@ function ResumesView() {
           />
         </div>
         <div className="res-toolbar-tags">
-          {TAG_PILLS.map((t) => (
+          <button
+            type="button"
+            className={`res-tag-pill ${tagFilter === "all" ? "is-active" : ""}`}
+            onClick={() => setTagFilter("all")}
+          >
+            All
+          </button>
+          {tags.map((t) => (
             <button
               key={t.id}
               type="button"
               className={`res-tag-pill ${tagFilter === t.id ? "is-active" : ""}`}
               onClick={() => setTagFilter(t.id)}
+              style={{
+                borderColor: tagFilter === t.id ? t.color ?? undefined : undefined,
+                color: tagFilter === t.id ? t.color ?? undefined : undefined,
+              }}
             >
-              {t.label}
+              {t.name}
             </button>
           ))}
+          <button
+            type="button"
+            className="res-tag-pill"
+            onClick={() => setShowTagManager(true)}
+            title="Manage tags"
+          >
+            + Manage
+          </button>
         </div>
         <div className="res-toolbar-spacer" />
         <button
@@ -294,6 +379,10 @@ function ResumesView() {
                 resume={r}
                 isActive={r.id === activeId}
                 onClick={() => setActiveId(r.id)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setContextMenu({ x: e.clientX, y: e.clientY, resumeId: r.id });
+                }}
               />
             ))}
             {!loading && resumes.length > 0 && (
@@ -337,7 +426,7 @@ function ResumesView() {
                   <button
                     type="button"
                     className="res-toolbar-action"
-                    onClick={() => onDelete(active.id)}
+                    onClick={() => requestDelete(active.id)}
                   >
                     Delete
                   </button>
@@ -352,8 +441,8 @@ function ResumesView() {
               </div>
               <div className="res-preview-body">
                 <div className="res-preview-stack">
-                  <PdfPreview key={active.id} resumeId={active.id} />
-                  <SentLog key={active.id} resumeId={active.id} />
+                  <PdfPreview key={`pdf-${active.id}`} resumeId={active.id} />
+                  <SentLog key={`sent-${active.id}`} resumeId={active.id} />
                 </div>
               </div>
             </>
@@ -374,6 +463,59 @@ function ResumesView() {
           filename={uploadFilename}
           finished={uploadDone}
           onDone={onParseDone}
+        />
+      )}
+
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        title="Delete this resume?"
+        body={(() => {
+          const t = resumes.find((r) => r.id === pendingDeleteId);
+          return t
+            ? `${t.label}. This removes the file from storage and detaches it from any applications.`
+            : "";
+        })()}
+        loading={deleting}
+        loadingLabel="Deleting…"
+        onConfirm={performDelete}
+        onCancel={() => {
+          if (deleting) return;
+          setPendingDeleteId(null);
+        }}
+      />
+
+      {contextMenu && (() => {
+        const r = resumes.find((x) => x.id === contextMenu.resumeId);
+        if (!r) return null;
+        const assigned = new Set(r.tags.map((t) => t.id));
+        return (
+          <ResumeContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            assignedTagIds={assigned}
+            allTags={tags}
+            onToggleTag={(tagId) => toggleTag(r.id, tagId)}
+            onManageTags={() => {
+              setContextMenu(null);
+              setShowTagManager(true);
+            }}
+            onDelete={() => {
+              setContextMenu(null);
+              requestDelete(r.id);
+            }}
+            onClose={() => setContextMenu(null)}
+          />
+        );
+      })()}
+
+      {showTagManager && (
+        <ResumeTagManager
+          tags={tags}
+          onClose={() => setShowTagManager(false)}
+          onChanged={() => {
+            loadTags();
+            load(false);
+          }}
         />
       )}
     </div>

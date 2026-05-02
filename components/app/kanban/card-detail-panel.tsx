@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
 import { useToast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   STATUS_OPTIONS,
   SOURCE_OPTIONS,
@@ -607,93 +607,29 @@ export function CardDetailPanel({
 
       </div>
 
-      {/* Confirms portaled to body so they escape the panel's transform stacking context */}
-      {typeof document !== "undefined" && confirmingDelete &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40"
-            onClick={() => setConfirmingDelete(false)}
-          >
-            <div
-              className="bg-[var(--color-surface)] border border-[var(--color-line)] rounded-md shadow-lg p-5 w-[88%] max-w-[420px]"
-              onClick={(e) => e.stopPropagation()}
-              style={{ animation: "fade-up 160ms ease-out both" }}
-            >
-              <h3 className="text-[14px] font-semibold text-[var(--color-ink)] mb-1">
-                Delete this application?
-              </h3>
-              <p className="text-[12px] text-[var(--color-ink-muted)] mb-4">
-                {app.company} — {app.roleTitle}. This cannot be undone.
-              </p>
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setConfirmingDelete(false)}
-                  className="px-3 py-1.5 text-[12px] font-mono text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={performDelete}
-                  className="px-3 py-1.5 text-[12px] font-mono text-white rounded-md"
-                  style={{ background: "oklch(0.55 0.13 30)" }}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
+      <ConfirmDialog
+        open={confirmingDelete}
+        title="Delete this application?"
+        body={`${app.company} — ${app.roleTitle}. This cannot be undone.`}
+        onConfirm={performDelete}
+        onCancel={() => setConfirmingDelete(false)}
+      />
 
-      {typeof document !== "undefined" && confirmingUndo &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40"
-            onClick={() => setConfirmingUndo(false)}
-          >
-            <div
-              className="bg-[var(--color-surface)] border border-[var(--color-line)] rounded-md shadow-lg p-5 w-[88%] max-w-[420px]"
-              onClick={(e) => e.stopPropagation()}
-              style={{ animation: "fade-up 160ms ease-out both" }}
-            >
-              {(() => {
-                const idx = timeline.length - 1 - pendingUndoCount;
-                const target = timeline[idx];
-                return (
-                  <>
-                    <h3 className="text-[14px] font-semibold text-[var(--color-ink)] mb-1">
-                      Stage undo · #{pendingUndoCount + 1}?
-                    </h3>
-                    <p className="text-[12px] text-[var(--color-ink-muted)] mb-4">
-                      {target
-                        ? `Will revert ${statusLabel(target.toStatus)} → ${statusLabel(target.fromStatus)} when you click Save. Stack more by clicking again. Close the panel to discard all.`
-                        : "No more events to revert."}
-                    </p>
-                  </>
-                );
-              })()}
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setConfirmingUndo(false)}
-                  className="px-3 py-1.5 text-[12px] font-mono text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={performUndo}
-                  className="px-3 py-1.5 text-[12px] font-mono text-white rounded-md bg-[var(--color-ink)] hover:bg-[var(--color-ink)]/90"
-                >
-                  Stage undo
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
+      <ConfirmDialog
+        open={confirmingUndo}
+        title={`Stage undo · #${pendingUndoCount + 1}?`}
+        body={(() => {
+          const idx = timeline.length - 1 - pendingUndoCount;
+          const target = timeline[idx];
+          return target
+            ? `Will revert ${statusLabel(target.toStatus)} → ${statusLabel(target.fromStatus)} when you click Save. Stack more by clicking again. Close the panel to discard all.`
+            : "No more events to revert.";
+        })()}
+        confirmLabel="Stack undo"
+        destructive={false}
+        onConfirm={performUndo}
+        onCancel={() => setConfirmingUndo(false)}
+      />
     </>
   );
 }

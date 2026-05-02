@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useQuickAdd } from "@/components/app/quick-add-context";
 
 const CRUMB_MAP: Record<string, string> = {
   "/app": "Dashboard",
@@ -13,6 +14,7 @@ const CRUMB_MAP: Record<string, string> = {
 
 export function Topbar() {
   const pathname = usePathname();
+  const { open } = useQuickAdd();
   const crumb = CRUMB_MAP[pathname] || pathname.split("/").pop() || "Dashboard";
 
   return (
@@ -45,15 +47,7 @@ export function Topbar() {
             />
           </svg>
         </button>
-        <button
-          className="topbar-quickadd"
-          onClick={() => {
-            // Dispatch keyboard event to trigger quick-add
-            window.dispatchEvent(
-              new KeyboardEvent("keydown", { key: "n", bubbles: true })
-            );
-          }}
-        >
+        <button className="topbar-quickadd" onClick={open}>
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
             <path
               d="M6 2v8M2 6h8"
