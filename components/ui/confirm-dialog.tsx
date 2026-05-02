@@ -60,12 +60,14 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onConfirm}
-            className="px-3 py-1.5 text-[12px] font-mono text-white rounded-md"
-            style={{
-              background: destructive
-                ? "oklch(0.55 0.13 30)"
-                : "oklch(0.45 0.04 250)",
-            }}
+            className="px-3 py-1.5 text-[12px] font-mono text-white rounded-md bg-[var(--cd-confirm-bg)] hover:bg-[var(--cd-confirm-bg)]/90 transition-colors duration-[140ms]"
+            style={
+              {
+                "--cd-confirm-bg": destructive
+                  ? "oklch(0.55 0.13 30)"
+                  : "var(--color-ink)",
+              } as React.CSSProperties
+            }
           >
             {confirmLabel}
           </button>
