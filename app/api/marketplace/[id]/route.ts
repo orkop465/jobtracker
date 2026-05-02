@@ -33,11 +33,20 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     row.thumbGcsPath ? signedReadUrl(row.thumbGcsPath).catch(() => "") : Promise.resolve(""),
   ]);
 
+  const isOwn = row.uploaderUserId === userId;
+  const exposeStatus = admin || isOwn;
+
   return NextResponse.json({
     ...toPublicDto(row),
     signedUrl: signed,
     thumbSignedUrl: thumbSigned || null,
     myRating,
     distribution: distributionFromRatings(row.ratings),
+    ...(exposeStatus
+      ? {
+          status: row.status,
+          rejectionReason: row.rejectionReason,
+        }
+      : {}),
   });
 }
