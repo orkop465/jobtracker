@@ -42,23 +42,25 @@ export default function DashboardPage() {
     fetchDashboard();
   }, [fetchDashboard]);
 
-  // Keyboard shortcuts
+  // Dashboard-local keyboard shortcuts (Esc closes peek/inline).
+  // Global N hotkey lives in <QuickAddProvider> — opens the overlay.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return;
-      if (e.key === "n" || e.key === "N") {
-        e.preventDefault();
-        setQuickOpen(true);
-      }
       if (e.key === "Escape") {
         setQuickOpen(false);
         setPeekAppId(null);
       }
     }
+    function onAppsChanged() {
+      fetchDashboard();
+    }
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+    window.addEventListener("app:applications-changed", onAppsChanged);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("app:applications-changed", onAppsChanged);
+    };
+  }, [fetchDashboard]);
 
   if (loading) {
     return (
