@@ -192,6 +192,7 @@ function ResumesView() {
   }, [load, toast]);
 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const requestDelete = useCallback(
     (resumeId: string) => setPendingDeleteId(resumeId),
@@ -200,27 +201,33 @@ function ResumesView() {
 
   const performDelete = useCallback(async () => {
     const resumeId = pendingDeleteId;
-    if (!resumeId) return;
-    setPendingDeleteId(null);
+    if (!resumeId || deleting) return;
 
     const target = resumes.find((r) => r.id === resumeId);
-    if (!target) return;
+    if (!target) {
+      setPendingDeleteId(null);
+      return;
+    }
 
-    const prev = resumes;
-    setResumes((cur) => cur.filter((r) => r.id !== resumeId));
-    if (activeId === resumeId) {
-      const next = prev.find((r) => r.id !== resumeId) ?? null;
-      setActiveId(next?.id ?? null);
-    }
-    const res = await fetch(`/api/resumes/${resumeId}`, { method: "DELETE" });
-    const data = await safeJson(res);
-    if (!res.ok) {
-      setResumes(prev);
-      toast(data?.error ?? "Delete failed", "error");
-    } else {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/resumes/${resumeId}`, { method: "DELETE" });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        toast(data?.error ?? "Delete failed", "error");
+        return;
+      }
+      setResumes((cur) => cur.filter((r) => r.id !== resumeId));
+      if (activeId === resumeId) {
+        const next = resumes.find((r) => r.id !== resumeId) ?? null;
+        setActiveId(next?.id ?? null);
+      }
       toast("Resume deleted", "success");
+      setPendingDeleteId(null);
+    } finally {
+      setDeleting(false);
     }
-  }, [activeId, pendingDeleteId, resumes, toast]);
+  }, [activeId, deleting, pendingDeleteId, resumes, toast]);
 
   const toggleTag = useCallback(
     async (resumeId: string, tagId: string) => {
@@ -468,8 +475,13 @@ function ResumesView() {
             ? `${t.label}. This removes the file from storage and detaches it from any applications.`
             : "";
         })()}
+        loading={deleting}
+        loadingLabel="Deleting…"
         onConfirm={performDelete}
-        onCancel={() => setPendingDeleteId(null)}
+        onCancel={() => {
+          if (deleting) return;
+          setPendingDeleteId(null);
+        }}
       />
 
       {contextMenu && (() => {
