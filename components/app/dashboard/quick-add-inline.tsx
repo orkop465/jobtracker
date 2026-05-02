@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { Resume } from "@/components/app/resumes/types";
 
 interface QuickAddInlineProps {
   open: boolean;
@@ -12,11 +13,24 @@ export function QuickAddInline({ open, setOpen, onCreated }: QuickAddInlineProps
   const [role, setRole] = useState("");
   const [company, setCompany] = useState("");
   const [stage, setStage] = useState("APPLIED");
+  const [resumeId, setResumeId] = useState<string>("");
+  const [resumes, setResumes] = useState<Resume[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (open && inputRef.current) inputRef.current.focus();
+    if (!open) return;
+    inputRef.current?.focus();
+    (async () => {
+      try {
+        const res = await fetch("/api/resumes", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        setResumes(data?.items ?? []);
+      } catch {
+        /* silent */
+      }
+    })();
   }, [open]);
 
   async function submit(e: React.FormEvent) {
@@ -25,19 +39,23 @@ export function QuickAddInline({ open, setOpen, onCreated }: QuickAddInlineProps
 
     setSubmitting(true);
     try {
+      const body: Record<string, unknown> = {
+        roleTitle: role.trim(),
+        company: company.trim(),
+        status: stage,
+      };
+      if (resumeId) body.resumeId = resumeId;
+
       const res = await fetch("/api/applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          roleTitle: role.trim(),
-          company: company.trim(),
-          status: stage,
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error();
       setRole("");
       setCompany("");
       setStage("APPLIED");
+      setResumeId("");
       setOpen(false);
       onCreated();
     } catch {
@@ -57,7 +75,6 @@ export function QuickAddInline({ open, setOpen, onCreated }: QuickAddInlineProps
             </svg>
           </span>
           Quick-add a role&hellip;
-          <kbd>N</kbd>
         </button>
       ) : (
         <form className="quickadd-form" onSubmit={submit}>
@@ -83,6 +100,20 @@ export function QuickAddInline({ open, setOpen, onCreated }: QuickAddInlineProps
               <option value="RECRUITER_SCREEN">Phone Screen</option>
               <option value="INTERVIEW_ROUND_1">Interview</option>
               <option value="OFFER">Offer</option>
+            </select>
+          </div>
+          <div className="quickadd-form-row">
+            <select
+              value={resumeId}
+              onChange={(e) => setResumeId(e.target.value)}
+              style={{ width: "100%" }}
+            >
+              <option value="">No resume</option>
+              {resumes.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.label}
+                </option>
+              ))}
             </select>
           </div>
           <div className="quickadd-actions">
