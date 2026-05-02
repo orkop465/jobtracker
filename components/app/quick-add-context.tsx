@@ -26,6 +26,11 @@ export function QuickAddProvider({ children }: { children: React.ReactNode }) {
   // Global N hotkey — works on every app-shell page.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      // Escape always closes — even from inside inputs.
+      if (e.key === "Escape") {
+        setIsOpen(false);
+        return;
+      }
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName?.toLowerCase();
       const editable = target?.isContentEditable;
@@ -34,9 +39,6 @@ export function QuickAddProvider({ children }: { children: React.ReactNode }) {
       if (e.key === "n" || e.key === "N") {
         e.preventDefault();
         setIsOpen(true);
-      }
-      if (e.key === "Escape") {
-        setIsOpen(false);
       }
     }
     window.addEventListener("keydown", onKey);

@@ -434,8 +434,8 @@ function ResumesView() {
               </div>
               <div className="res-preview-body">
                 <div className="res-preview-stack">
-                  <PdfPreview key={active.id} resumeId={active.id} />
-                  <SentLog key={active.id} resumeId={active.id} />
+                  <PdfPreview key={`pdf-${active.id}`} resumeId={active.id} />
+                  <SentLog key={`sent-${active.id}`} resumeId={active.id} />
                 </div>
               </div>
             </>
