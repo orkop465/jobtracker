@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { Storage } from "@google-cloud/storage";
 import { z } from "zod";
 import { auth } from "@/auth";
+import type { MarketplaceRoleCategory, MarketplaceSeniority } from "@prisma/client";
 
 const storage = new Storage();
 const IdSchema = z.string().min(1);
@@ -71,4 +72,60 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
       { status: 400 }
     );
   }
+}
+
+const ROLE_SET = new Set(["SWE", "PM", "DESIGN", "DATA", "ML", "DEVOPS", "SECURITY", "OTHER"]);
+const SEN_SET = new Set(["STUDENT", "INTERN", "ENTRY", "MID", "SENIOR", "STAFF_PLUS"]);
+
+export async function PATCH(req: NextRequest, ctx: Ctx) {
+  const userId = await getUserIdOrNull();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await ctx.params;
+  const resumeId = IdSchema.parse(id);
+
+  const body = await req.json().catch(() => null);
+  const data: Partial<{
+    label: string;
+    roleCategory: MarketplaceRoleCategory | null;
+    seniority: MarketplaceSeniority | null;
+  }> = {};
+  if (typeof body?.label === "string") {
+    const label = body.label.trim();
+    if (!label || label.length > 120) {
+      return NextResponse.json({ error: "Invalid label" }, { status: 400 });
+    }
+    data.label = label;
+  }
+  if (Object.prototype.hasOwnProperty.call(body ?? {}, "roleCategory")) {
+    const r = body.roleCategory;
+    if (r === null) data.roleCategory = null;
+    else if (typeof r === "string" && ROLE_SET.has(r.toUpperCase())) {
+      data.roleCategory = r.toUpperCase() as MarketplaceRoleCategory;
+    } else return NextResponse.json({ error: "Invalid roleCategory" }, { status: 400 });
+  }
+  if (Object.prototype.hasOwnProperty.call(body ?? {}, "seniority")) {
+    const s = body.seniority;
+    if (s === null) data.seniority = null;
+    else if (typeof s === "string" && SEN_SET.has(s.toUpperCase())) {
+      data.seniority = s.toUpperCase() as MarketplaceSeniority;
+    } else return NextResponse.json({ error: "Invalid seniority" }, { status: 400 });
+  }
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: "No fields to update" }, { status: 400 });
+  }
+
+  const updated = await prisma.resume.updateMany({
+    where: { id: resumeId, userId },
+    data,
+  });
+  if (updated.count !== 1) {
+    return NextResponse.json({ error: "Resume not found" }, { status: 404 });
+  }
+
+  const fresh = await prisma.resume.findUnique({
+    where: { id: resumeId },
+    select: { id: true, label: true, roleCategory: true, seniority: true },
+  });
+  return NextResponse.json({ item: fresh });
 }
