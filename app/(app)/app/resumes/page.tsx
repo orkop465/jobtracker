@@ -11,13 +11,27 @@ import { PdfPreview } from "@/components/app/resumes/pdf-preview";
 import { SentLog } from "@/components/app/resumes/sent-log";
 import { DragOverlay } from "@/components/app/resumes/drag-overlay";
 import {
-  deriveTag,
   relativeTime,
-  type DerivedTag,
   type Resume,
 } from "@/components/app/resumes/types";
 
-type TagFilter = "all" | DerivedTag;
+// TEMPORARY stop-gap (Task 3.5). Replaced by persisted-tag filter in Task 3.9.
+type LegacyDerivedTag = "swe" | "pm" | "design" | "data" | "ml" | "other";
+const LEGACY_TAG_PATTERNS: { tag: LegacyDerivedTag; rx: RegExp }[] = [
+  { tag: "ml", rx: /\b(ml|machine\s?learning|ai|llm|nlp|recsys)\b/i },
+  { tag: "data", rx: /\b(data|analyst|analytics|scientist)\b/i },
+  { tag: "design", rx: /\b(design|ux|ui)\b/i },
+  { tag: "pm", rx: /\b(pm|product\s?manager|product)\b/i },
+  { tag: "swe", rx: /\b(swe|sde|engineer|frontend|backend|fullstack|full-stack|developer|software)\b/i },
+];
+function deriveLegacyTag(label: string): LegacyDerivedTag {
+  for (const { tag, rx } of LEGACY_TAG_PATTERNS) {
+    if (rx.test(label)) return tag;
+  }
+  return "other";
+}
+
+type TagFilter = "all" | LegacyDerivedTag;
 
 const TAG_PILLS: { id: TagFilter; label: string }[] = [
   { id: "all", label: "All" },
@@ -108,7 +122,7 @@ function ResumesView() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return resumes.filter((r) => {
-      const tag = deriveTag(r.label);
+      const tag = deriveLegacyTag(r.label);
       if (tagFilter !== "all" && tag !== tagFilter) return false;
       if (!q) return true;
       return (

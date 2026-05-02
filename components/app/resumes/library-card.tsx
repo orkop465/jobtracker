@@ -1,6 +1,6 @@
 "use client";
 
-import { deriveTag, relativeTime, type Resume } from "./types";
+import { relativeTime, type Resume } from "./types";
 
 interface Props {
   resume: Resume;
@@ -8,8 +8,24 @@ interface Props {
   onClick: () => void;
 }
 
+// TEMPORARY stop-gap (Task 3.5). Replaced by persisted-tag chip stack in Task 3.6.
+type LegacyDerivedTag = "swe" | "pm" | "design" | "data" | "ml" | "other";
+const LEGACY_TAG_PATTERNS: { tag: LegacyDerivedTag; rx: RegExp }[] = [
+  { tag: "ml", rx: /\b(ml|machine\s?learning|ai|llm|nlp|recsys)\b/i },
+  { tag: "data", rx: /\b(data|analyst|analytics|scientist)\b/i },
+  { tag: "design", rx: /\b(design|ux|ui)\b/i },
+  { tag: "pm", rx: /\b(pm|product\s?manager|product)\b/i },
+  { tag: "swe", rx: /\b(swe|sde|engineer|frontend|backend|fullstack|full-stack|developer|software)\b/i },
+];
+function deriveLegacyTag(label: string): LegacyDerivedTag {
+  for (const { tag, rx } of LEGACY_TAG_PATTERNS) {
+    if (rx.test(label)) return tag;
+  }
+  return "other";
+}
+
 export function LibraryCard({ resume, isActive, onClick }: Props) {
-  const tag = deriveTag(resume.label);
+  const tag = deriveLegacyTag(resume.label);
   const sizeKb = Math.max(1, Math.round(resume.sizeBytes / 1024));
 
   return (
