@@ -57,40 +57,41 @@ model User {
   emailVerified DateTime?
 
   /// Credentials login (null for OAuth-only accounts)
-  passwordHash  String?
+  passwordHash String?
 
-  accounts      Account[]
-  sessions      Session[]
+  accounts Account[]
+  sessions Session[]
 
-  applications  Application[]
-  resumes       Resume[]
-  statusEvents  ApplicationStatusEvent[]
-  boardColumns  BoardColumn[]
-  followUps     FollowUp[]
-  interviews    Interview[]
+  applications Application[]
+  resumes      Resume[]
+  resumeTags   ResumeTag[]
+  statusEvents ApplicationStatusEvent[]
+  boardColumns BoardColumn[]
+  followUps    FollowUp[]
+  interviews   Interview[]
 
-  weeklyGoal    Int?
+  weeklyGoal Int?
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Account {
-  id                 String  @id @default(cuid())
-  userId             String
-  type               String
-  provider           String
-  providerAccountId  String
+  id                String @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
 
-  refresh_token      String?
-  access_token       String?
-  expires_at         Int?
-  token_type         String?
-  scope              String?
-  id_token           String?
-  session_state      String?
+  refresh_token String?
+  access_token  String?
+  expires_at    Int?
+  token_type    String?
+  scope         String?
+  id_token      String?
+  session_state String?
 
-  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
   @@index([userId])
@@ -102,7 +103,7 @@ model Session {
   userId       String
   expires      DateTime
 
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -116,9 +117,9 @@ model VerificationToken {
 }
 
 model Resume {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   label     String
   gcsPath   String   @unique
@@ -128,15 +129,43 @@ model Resume {
   createdAt DateTime @default(now())
 
   applications Application[]
+  tags         ResumeTagOnResume[]
 
   @@index([userId])
+}
+
+model ResumeTag {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name      String
+  color     String?
+  position  Float    @default(0)
+  createdAt DateTime @default(now())
+
+  resumes ResumeTagOnResume[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model ResumeTagOnResume {
+  resumeId String
+  tagId    String
+
+  resume Resume    @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  tag    ResumeTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([resumeId, tagId])
+  @@index([tagId])
 }
 
 model Application {
   id String @id @default(cuid())
 
-  userId    String
-  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   company   String
   roleTitle String
@@ -152,7 +181,7 @@ model Application {
   boardColumn   BoardColumn? @relation(fields: [boardColumnId], references: [id], onDelete: SetNull)
   // Sort order within boardColumn. Float lets us insert between two cards
   // without renumbering siblings (use midpoint between neighbors).
-  position      Float    @default(0)
+  position      Float        @default(0)
 
   salaryMin       Int?
   salaryMax       Int?
@@ -199,10 +228,10 @@ model BoardColumn {
 }
 
 model ApplicationStatusEvent {
-  id            String @id @default(cuid())
+  id String @id @default(cuid())
 
-  userId        String
-  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   applicationId String
   application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
@@ -213,7 +242,7 @@ model ApplicationStatusEvent {
   occurredAt DateTime @default(now())
 
   voidedAt   DateTime?
-  voidedById String?   // keep for future audit; do NOT make this unique
+  voidedById String? // keep for future audit; do NOT make this unique
 
   createdAt DateTime @default(now())
 
@@ -243,11 +272,11 @@ model FollowUp {
 }
 
 model Interview {
-  id            String        @id @default(cuid())
+  id            String      @id @default(cuid())
   userId        String
-  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   applicationId String
-  application   Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   title       String
   scheduledAt DateTime
