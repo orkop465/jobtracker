@@ -242,7 +242,9 @@ export function RedactionCanvas({ sourceUrl, rectangles, onChange, onPageCount }
                 return (
                   <div
                     key={r.idx}
-                    onClick={(e) => {
+                    onPointerDown={(e) => {
+                      // Stop the parent canvas from starting a phantom drag,
+                      // and grab selection here so the click actually lands.
                       e.stopPropagation();
                       setSelectedIdx(r.idx);
                     }}
@@ -253,11 +255,48 @@ export function RedactionCanvas({ sourceUrl, rectangles, onChange, onPageCount }
                       width: w,
                       height: h,
                       background: "#000",
-                      outline: sel ? "1.5px solid var(--accent)" : "none",
+                      outline: sel ? "2px solid var(--accent)" : "none",
+                      outlineOffset: 1,
                       cursor: "pointer",
                     }}
                     title="Click to select; Delete to remove"
-                  />
+                  >
+                    {sel && (
+                      <button
+                        type="button"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const next = rectangles.filter((_, i) => i !== r.idx);
+                          setSelectedIdx(null);
+                          onChange(next);
+                        }}
+                        title="Delete this redaction"
+                        aria-label="Delete redaction"
+                        style={{
+                          position: "absolute",
+                          top: -10,
+                          right: -10,
+                          width: 22,
+                          height: 22,
+                          borderRadius: "50%",
+                          background: "var(--bg)",
+                          color: "var(--ink)",
+                          border: "1.5px solid var(--accent)",
+                          cursor: "pointer",
+                          fontSize: 14,
+                          lineHeight: "18px",
+                          padding: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          boxShadow: "var(--shadow-sm)",
+                        }}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
                 );
               })}
             {/* In-progress drag preview */}

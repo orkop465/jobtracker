@@ -40,10 +40,13 @@ export function ResumeTagManager({ tags: initial, onClose, onChanged }: Props) {
     if (adding || !newName.trim()) return;
     setAdding(true);
     try {
+      // Pick a random palette color so new tags aren't silently colorless.
+      const randomColor =
+        COLOR_PALETTE[Math.floor(Math.random() * COLOR_PALETTE.length)].value;
       const res = await fetch("/api/resume-tags", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName.trim() }),
+        body: JSON.stringify({ name: newName.trim(), color: randomColor }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
