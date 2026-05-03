@@ -47,6 +47,22 @@ export function AdminDetailClient({ id }: Props) {
       });
   }, [id]);
 
+  // Find the next pending submission so we can chain through the queue.
+  async function gotoNextOrQueue() {
+    try {
+      const res = await fetch("/api/admin/marketplace?status=PENDING_REVIEW", {
+        cache: "no-store",
+      });
+      const data = await res.json().catch(() => ({}));
+      const items = (data?.items ?? []) as Array<{ id: string }>;
+      const next = items.find((it) => it.id !== id);
+      if (next) router.push(`/app/admin/marketplace/${next.id}`);
+      else router.push("/app/admin/marketplace");
+    } catch {
+      router.push("/app/admin/marketplace");
+    }
+  }
+
   async function action(
     path: string,
     body?: Record<string, unknown>,
@@ -62,17 +78,21 @@ export function AdminDetailClient({ id }: Props) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data?.error ?? `Action failed (${res.status})`);
+        setBusy(false);
         return false;
       }
       return true;
-    } finally {
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Action failed");
       setBusy(false);
+      return false;
     }
   }
 
   async function approve() {
     if (await action(`/api/admin/marketplace/${id}/approve`)) {
       setStatus("PUBLISHED");
+      await gotoNextOrQueue();
     }
   }
   async function rejectSubmit() {
@@ -84,6 +104,7 @@ export function AdminDetailClient({ id }: Props) {
       setStatus("REJECTED");
       setReasonOpen(null);
       setReason("");
+      await gotoNextOrQueue();
     }
   }
   async function unpublishSubmit() {
@@ -95,6 +116,9 @@ export function AdminDetailClient({ id }: Props) {
       setStatus("UNPUBLISHED");
       setReasonOpen(null);
       setReason("");
+      // Unpublish lives off the Published tab — go back to the queue
+      // rather than chaining through Pending.
+      router.push("/app/admin/marketplace");
     }
   }
   async function toggleFeature() {
@@ -102,6 +126,7 @@ export function AdminDetailClient({ id }: Props) {
     const next = !detail.featured;
     if (await action(`/api/admin/marketplace/${id}/feature`, { featured: next })) {
       setDetail({ ...detail, featured: next });
+      setBusy(false);
     }
   }
 
@@ -237,11 +262,15 @@ export function AdminDetailClient({ id }: Props) {
           >
             <Stat label="Pages" value={String(detail.pageCount)} />
             <Stat label="Size" value={`${(detail.sizeBytes / 1024).toFixed(0)} KB`} />
-            <Stat
-              label="Avg rating"
-              value={detail.ratingCount > 0 ? (detail.ratingAverage ?? 0).toFixed(1) : "—"}
-            />
-            <Stat label="Ratings" value={String(detail.ratingCount)} />
+            {detail.ratingCount > 0 && (
+              <>
+                <Stat
+                  label="Avg rating"
+                  value={(detail.ratingAverage ?? 0).toFixed(1)}
+                />
+                <Stat label="Ratings" value={String(detail.ratingCount)} />
+              </>
+            )}
           </div>
 
           {error && (
@@ -266,9 +295,14 @@ export function AdminDetailClient({ id }: Props) {
                 onClick={approve}
                 disabled={busy}
                 className="modal-rate-btn"
-                style={{ background: "oklch(0.55 0.13 145)", borderColor: "oklch(0.55 0.13 145)" }}
+                style={{
+                  background: "oklch(0.55 0.13 145)",
+                  borderColor: "oklch(0.55 0.13 145)",
+                  opacity: busy ? 0.6 : 1,
+                  cursor: busy ? "not-allowed" : "pointer",
+                }}
               >
-                Approve
+                {busy ? "Approving…" : "Approve"}
               </button>
             )}
             {canReject && (
@@ -283,7 +317,8 @@ export function AdminDetailClient({ id }: Props) {
                   fontFamily: "var(--sans)",
                   fontSize: 13,
                   color: "var(--ink)",
-                  cursor: "pointer",
+                  cursor: busy ? "not-allowed" : "pointer",
+                  opacity: busy ? 0.6 : 1,
                 }}
               >
                 Reject…
@@ -301,7 +336,8 @@ export function AdminDetailClient({ id }: Props) {
                   fontFamily: "var(--sans)",
                   fontSize: 13,
                   color: "var(--ink)",
-                  cursor: "pointer",
+                  cursor: busy ? "not-allowed" : "pointer",
+                  opacity: busy ? 0.6 : 1,
                 }}
               >
                 Unpublish…
@@ -385,9 +421,19 @@ export function AdminDetailClient({ id }: Props) {
                 onClick={reasonOpen === "reject" ? rejectSubmit : unpublishSubmit}
                 disabled={busy || !reason.trim()}
                 className="modal-rate-btn"
-                style={{ marginTop: 14 }}
+                style={{
+                  marginTop: 14,
+                  opacity: busy || !reason.trim() ? 0.6 : 1,
+                  cursor: busy || !reason.trim() ? "not-allowed" : "pointer",
+                }}
               >
-                {reasonOpen === "reject" ? "Reject" : "Unpublish"}
+                {busy
+                  ? reasonOpen === "reject"
+                    ? "Rejecting…"
+                    : "Unpublishing…"
+                  : reasonOpen === "reject"
+                    ? "Reject"
+                    : "Unpublish"}
               </button>
             </div>
           </div>
