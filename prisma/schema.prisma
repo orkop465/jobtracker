@@ -99,6 +99,7 @@ model User {
 
   publicResumes       PublicResume[]       @relation("PublicResumeUploader")
   publicResumeRatings PublicResumeRating[] @relation("PublicResumeRater")
+  publicResumeSaves   PublicResumeSave[]   @relation("PublicResumeSaver")
 
   weeklyGoal Int?
 
@@ -323,6 +324,20 @@ model Interview {
   @@index([applicationId])
 }
 
+model PublicResumeSave {
+  id             String       @id @default(cuid())
+  publicResumeId String
+  publicResume   PublicResume @relation(fields: [publicResumeId], references: [id], onDelete: Cascade)
+
+  saverUserId String
+  saver       User   @relation("PublicResumeSaver", fields: [saverUserId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([publicResumeId, saverUserId])
+  @@index([saverUserId])
+}
+
 model PublicResume {
   id             String @id @default(cuid())
   uploaderUserId String
@@ -348,6 +363,7 @@ model PublicResume {
   ratingSum   Int @default(0)
 
   ratings PublicResumeRating[]
+  saves   PublicResumeSave[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

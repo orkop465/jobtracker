@@ -19,7 +19,11 @@ import {
   type SortId,
 } from "@/components/app/marketplace/types";
 
-type Tab = "browse" | "mine";
+type Tab = "browse" | "saved" | "mine";
+
+interface SavedItem extends PublicResumeListItem {
+  savedAt: string;
+}
 type View = "grid" | "list";
 
 interface PrivateResumeOption {
@@ -41,7 +45,10 @@ export function MarketplaceClient() {
   const router = useRouter();
   const sp = useSearchParams();
 
-  const [tab, setTab] = useState<Tab>(sp.get("tab") === "mine" ? "mine" : "browse");
+  const initialTab = sp.get("tab");
+  const [tab, setTab] = useState<Tab>(
+    initialTab === "mine" || initialTab === "saved" ? initialTab : "browse",
+  );
 
   // Browse state
   const [search, setSearch] = useState(sp.get("q") ?? "");
@@ -72,6 +79,8 @@ export function MarketplaceClient() {
   const [loadingMine, setLoadingMine] = useState(false);
 
   const [privateResumes, setPrivateResumes] = useState<PrivateResumeOption[]>([]);
+  const [saved, setSaved] = useState<SavedItem[]>([]);
+  const [loadingSaved, setLoadingSaved] = useState(false);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -149,6 +158,23 @@ export function MarketplaceClient() {
       .finally(() => setLoadingMine(false));
   }, [tab]);
 
+  // Load saved (always — used by both the bookmark fill state on Browse and
+  // the Saved tab list).
+  useEffect(() => {
+    setLoadingSaved(true);
+    fetch("/api/marketplace/saved", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        setSaved(d.items ?? []);
+        setSavedIds(new Set<string>((d.savedIds ?? []) as string[]));
+      })
+      .catch(() => {
+        setSaved([]);
+        setSavedIds(new Set());
+      })
+      .finally(() => setLoadingSaved(false));
+  }, []);
+
   // Load private resume list (for share modal)
   useEffect(() => {
     fetch("/api/resumes", { cache: "no-store" })
@@ -211,18 +237,42 @@ export function MarketplaceClient() {
       return n;
     });
   }
-  function toggleSaved(id: string) {
+  async function toggleSaved(id: string) {
+    const wasSaved = savedIds.has(id);
+    // Optimistic UI; revert on failure.
     setSavedIds((s) => {
       const n = new Set(s);
-      if (n.has(id)) {
-        n.delete(id);
-        showToast("Removed from saved");
-      } else {
-        n.add(id);
-        showToast("Saved to your library");
-      }
+      if (wasSaved) n.delete(id);
+      else n.add(id);
       return n;
     });
+    try {
+      const res = await fetch(`/api/marketplace/${id}/save`, {
+        method: wasSaved ? "DELETE" : "PUT",
+      });
+      if (!res.ok) {
+        setSavedIds((s) => {
+          const n = new Set(s);
+          if (wasSaved) n.add(id);
+          else n.delete(id);
+          return n;
+        });
+        const data = await res.json().catch(() => ({}));
+        showToast(data?.error ?? "Save failed");
+        return;
+      }
+      showToast(wasSaved ? "Removed from saved" : "Saved to your library");
+      // If we're on the Saved tab, drop the unsaved row from view immediately.
+      if (wasSaved) setSaved((cur) => cur.filter((s) => s.id !== id));
+    } catch (e) {
+      setSavedIds((s) => {
+        const n = new Set(s);
+        if (wasSaved) n.add(id);
+        else n.delete(id);
+        return n;
+      });
+      showToast(e instanceof Error ? e.message : "Save failed");
+    }
   }
 
   const filteredCount = items.length;
@@ -275,6 +325,7 @@ export function MarketplaceClient() {
         {(
           [
             { id: "browse", label: "Browse" },
+            { id: "saved", label: `Saved${savedIds.size ? ` (${savedIds.size})` : ""}` },
             { id: "mine", label: "My submissions" },
           ] as const
         ).map((t) => (
@@ -543,6 +594,59 @@ export function MarketplaceClient() {
             </div>
           </div>
         </>
+      )}
+
+      {tab === "saved" && (
+        <div style={{ padding: "24px 32px 60px", overflowY: "auto" }}>
+          <h2 className="market-feed-count" style={{ marginBottom: 18 }}>
+            {loadingSaved ? "Loading…" : `${saved.length} saved`}
+            <span>· your library</span>
+          </h2>
+          {!loadingSaved && saved.length === 0 && (
+            <div
+              style={{
+                border: "1px solid var(--line)",
+                borderRadius: 6,
+                padding: 40,
+                textAlign: "center",
+                background: "var(--bg-2)",
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "var(--display)",
+                  fontSize: 20,
+                  marginBottom: 6,
+                }}
+              >
+                Nothing saved yet.
+              </div>
+              <div
+                style={{
+                  fontFamily: "var(--sans)",
+                  fontSize: 13,
+                  color: "var(--ink-2)",
+                }}
+              >
+                Click the bookmark on any resume in Browse to save it here.
+              </div>
+            </div>
+          )}
+          {!loadingSaved && saved.length > 0 && (
+            <div className="market-grid">
+              {saved.map((r) => (
+                <MarketCard
+                  key={r.id}
+                  resume={r}
+                  thumbUrl={r.thumbUrl}
+                  isSaved={savedIds.has(r.id)}
+                  onSave={() => toggleSaved(r.id)}
+                  onOpen={() => setOpenId(r.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {tab === "mine" && (
