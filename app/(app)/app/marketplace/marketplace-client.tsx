@@ -818,6 +818,16 @@ export function MarketplaceClient() {
               ),
             );
           }}
+          onDeleted={() => {
+            setItems((cur) => cur.filter((r) => r.id !== openDetail.id));
+            setMine((cur) => cur.filter((r) => r.id !== openDetail.id));
+            setSaved((cur) => cur.filter((r) => r.id !== openDetail.id));
+            setSavedIds((cur) => {
+              const n = new Set(cur);
+              n.delete(openDetail.id);
+              return n;
+            });
+          }}
           onToast={showToast}
         />
       )}

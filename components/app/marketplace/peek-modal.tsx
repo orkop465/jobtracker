@@ -9,6 +9,7 @@ interface Props {
   isOwn: boolean;
   onClose: () => void;
   onRated: (stars: number | null) => void;
+  onDeleted?: () => void;
   onToast: (msg: string) => void;
 }
 
@@ -21,12 +22,34 @@ const RATE_TAGS = [
   "Visual design",
 ];
 
-export function PeekModal({ detail, isOwn, onClose, onRated, onToast }: Props) {
+export function PeekModal({ detail, isOwn, onClose, onRated, onDeleted, onToast }: Props) {
   const [myRating, setMyRating] = useState(detail.myRating ?? 0);
   const [hoverRating, setHoverRating] = useState(0);
   const [myTags, setMyTags] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(detail.myRating !== null);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  async function deleteSubmission() {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/marketplace/${detail.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        onToast(data?.error ?? "Delete failed");
+        setDeleting(false);
+        return;
+      }
+      onToast("Submission deleted");
+      onDeleted?.();
+      onClose();
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : "Delete failed");
+      setDeleting(false);
+    }
+  }
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -190,6 +213,19 @@ export function PeekModal({ detail, isOwn, onClose, onRated, onToast }: Props) {
             )}
           </div>
           <div className="market-modal-actions">
+            {isOwn && (
+              <button
+                className="market-modal-action"
+                onClick={() => setConfirmDelete(true)}
+                disabled={deleting}
+                style={{
+                  borderColor: "oklch(0.55 0.13 30)",
+                  color: "oklch(0.45 0.13 30)",
+                }}
+              >
+                Delete
+              </button>
+            )}
             <div style={{ flex: 1 }} />
             <button className="market-modal-action primary" onClick={downloadPdf}>
               Download PDF
@@ -197,6 +233,71 @@ export function PeekModal({ detail, isOwn, onClose, onRated, onToast }: Props) {
           </div>
         </div>
       </div>
+      {confirmDelete && (
+        <div
+          className="market-modal-overlay"
+          onClick={() => !deleting && setConfirmDelete(false)}
+          style={{ zIndex: 110 }}
+        >
+          <div
+            className="market-modal"
+            style={{ gridTemplateColumns: "1fr", maxWidth: 440 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="market-modal-head">
+              <div className="market-modal-eyebrow">Delete submission</div>
+              <h2 className="market-modal-title">Permanently delete?</h2>
+              <button
+                className="market-modal-close"
+                onClick={() => !deleting && setConfirmDelete(false)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <div className="market-modal-body" style={{ padding: "20px 24px 24px" }}>
+              <p className="market-modal-bio">
+                Removes the file from the marketplace and any ratings or saves others left.
+                This cannot be undone.
+              </p>
+              <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleting}
+                  style={{
+                    flex: 1,
+                    padding: "9px 14px",
+                    background: "transparent",
+                    border: "1px solid var(--line)",
+                    borderRadius: 4,
+                    fontFamily: "var(--sans)",
+                    fontSize: 13,
+                    color: "var(--ink-2)",
+                    cursor: deleting ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={deleteSubmission}
+                  disabled={deleting}
+                  className="modal-rate-btn"
+                  style={{
+                    flex: 2,
+                    background: "oklch(0.55 0.13 30)",
+                    borderColor: "oklch(0.55 0.13 30)",
+                    cursor: deleting ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {deleting ? "Deleting…" : "Delete permanently"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
