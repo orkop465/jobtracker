@@ -3,7 +3,6 @@ import { Storage } from "@google-cloud/storage";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
-import type { MarketplaceRoleCategory, MarketplaceSeniority } from "@prisma/client";
 
 function mustGetEnv(name: string) {
   const v = process.env[name];
@@ -77,8 +76,6 @@ export async function GET() {
       name: rt.tag.name,
       color: rt.tag.color,
     })),
-    roleCategory: r.roleCategory,
-    seniority: r.seniority,
   }));
 
   return NextResponse.json({ items });
@@ -96,8 +93,6 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const label = String(form.get("label") ?? "").trim();
     const file = form.get("file");
-    const roleRaw = String(form.get("roleCategory") ?? "").trim().toUpperCase();
-    const senRaw = String(form.get("seniority") ?? "").trim().toUpperCase();
 
     if (!label) {
       return NextResponse.json({ error: "Label is required" }, { status: 400 });
@@ -111,11 +106,6 @@ export async function POST(req: Request) {
     if (file.size > MAX_BYTES) {
       return NextResponse.json({ error: "File too large (max 2MB)" }, { status: 400 });
     }
-
-    const ROLE_SET = new Set(["SWE", "PM", "DESIGN", "DATA", "ML", "DEVOPS", "SECURITY", "OTHER"]);
-    const SEN_SET = new Set(["STUDENT", "INTERN", "ENTRY", "MID", "SENIOR", "STAFF_PLUS"]);
-    const roleCategory = ROLE_SET.has(roleRaw) ? (roleRaw as MarketplaceRoleCategory) : null;
-    const seniority = SEN_SET.has(senRaw) ? (senRaw as MarketplaceSeniority) : null;
 
     const bytes = Buffer.from(await file.arrayBuffer());
 
@@ -151,8 +141,6 @@ export async function POST(req: Request) {
         filename: safeName,
         mimeType: "application/pdf",
         sizeBytes: bytes.length,
-        roleCategory,
-        seniority,
       },
     });
 
@@ -169,8 +157,6 @@ export async function POST(req: Request) {
           sentCount: 0,
           lastAppliedAt: null,
           tags: [],
-          roleCategory: created.roleCategory,
-          seniority: created.seniority,
         },
       },
       { status: 201 },

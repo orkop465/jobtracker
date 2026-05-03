@@ -16,8 +16,5 @@ export default async function SubmitPage({
   const source = typeof sp.source === "string" ? sp.source : "";
   if (!source) redirect("/app/marketplace");
 
-  const role = typeof sp.role === "string" ? sp.role : null;
-  const seniority = typeof sp.seniority === "string" ? sp.seniority : null;
-
-  return <SubmitClient stagingKey={source} initialRole={role} initialSeniority={seniority} />;
+  return <SubmitClient stagingKey={source} />;
 }

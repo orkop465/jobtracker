@@ -69,11 +69,8 @@ export function ShareModal({ privateResumes, onClose, onToast }: Props) {
         setStep("chooser");
         return;
       }
-      const params = new URLSearchParams({ source: data.stagingKey });
-      if (data.prefill?.roleCategory) params.set("role", data.prefill.roleCategory);
-      if (data.prefill?.seniority) params.set("seniority", data.prefill.seniority);
       onToast("Loaded — redact it next");
-      router.push(`/app/marketplace/submit?${params.toString()}`);
+      router.push(`/app/marketplace/submit?source=${encodeURIComponent(data.stagingKey)}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not stage resume");
       setStep("chooser");

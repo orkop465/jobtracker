@@ -12,24 +12,18 @@ import {
 
 interface Props {
   stagingKey: string;
-  initialRole: string | null;
-  initialSeniority: string | null;
 }
 
 const AFFIRMATION =
   "I confirm I have covered every piece of personally identifiable information in this resume (name, contact info, specific employer/school names if I want them hidden, etc.). I understand an admin will review this before it goes public, but I am responsible for the accuracy of this redaction.";
 
-export function SubmitClient({ stagingKey, initialRole, initialSeniority }: Props) {
+export function SubmitClient({ stagingKey }: Props) {
   const router = useRouter();
   const [rectangles, setRectangles] = useState<Rectangle[]>([]);
   const [pageCount, setPageCount] = useState<number>(0);
   const [title, setTitle] = useState("");
-  const [role, setRole] = useState<RoleId | "">(
-    isRole(initialRole) ? initialRole : "",
-  );
-  const [seniority, setSeniority] = useState<SeniorityId | "">(
-    isSeniority(initialSeniority) ? initialSeniority : "",
-  );
+  const [role, setRole] = useState<RoleId | "">("");
+  const [seniority, setSeniority] = useState<SeniorityId | "">("");
   const [notes, setNotes] = useState("");
   const [affirmed, setAffirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -335,11 +329,3 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 4,
 };
 
-function isRole(s: string | null): s is RoleId {
-  if (!s) return false;
-  return ROLE_FILTERS.some((r) => r.id === s);
-}
-function isSeniority(s: string | null): s is SeniorityId {
-  if (!s) return false;
-  return SENIORITY_FILTERS.some((r) => r.id === s);
-}

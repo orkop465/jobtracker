@@ -1,41 +1,3 @@
-export type RoleCategory =
-  | "SWE"
-  | "PM"
-  | "DESIGN"
-  | "DATA"
-  | "ML"
-  | "DEVOPS"
-  | "SECURITY"
-  | "OTHER";
-
-export type Seniority =
-  | "STUDENT"
-  | "INTERN"
-  | "ENTRY"
-  | "MID"
-  | "SENIOR"
-  | "STAFF_PLUS";
-
-export const ROLE_OPTIONS: { value: RoleCategory; label: string }[] = [
-  { value: "SWE", label: "Software Engineering" },
-  { value: "PM", label: "Product Management" },
-  { value: "DESIGN", label: "Design" },
-  { value: "DATA", label: "Data / Analytics" },
-  { value: "ML", label: "ML / AI" },
-  { value: "DEVOPS", label: "DevOps / Infra" },
-  { value: "SECURITY", label: "Security" },
-  { value: "OTHER", label: "Other" },
-];
-
-export const SENIORITY_OPTIONS: { value: Seniority; label: string }[] = [
-  { value: "STUDENT", label: "Student" },
-  { value: "INTERN", label: "Intern / New grad" },
-  { value: "ENTRY", label: "Junior (1-3 yrs)" },
-  { value: "MID", label: "Mid (3-6 yrs)" },
-  { value: "SENIOR", label: "Senior (6-10 yrs)" },
-  { value: "STAFF_PLUS", label: "Staff+ (10+ yrs)" },
-];
-
 export type Resume = {
   id: string;
   label: string;
@@ -47,8 +9,6 @@ export type Resume = {
   sentCount: number;
   lastAppliedAt: string | null;
   tags: ResumeTag[];
-  roleCategory: RoleCategory | null;
-  seniority: Seniority | null;
 };
 
 export type ResumeTag = {

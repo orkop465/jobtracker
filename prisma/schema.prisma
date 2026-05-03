@@ -158,9 +158,6 @@ model Resume {
   sizeBytes Int
   createdAt DateTime @default(now())
 
-  roleCategory MarketplaceRoleCategory?
-  seniority    MarketplaceSeniority?
-
   applications Application[]
   tags         ResumeTagOnResume[]
 

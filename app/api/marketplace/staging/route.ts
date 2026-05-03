@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
 
     const r = await prisma.resume.findFirst({
       where: { id: resumeId, userId },
-      select: { gcsPath: true, sizeBytes: true, mimeType: true, roleCategory: true, seniority: true },
+      select: { gcsPath: true, sizeBytes: true, mimeType: true },
     });
     if (!r) return NextResponse.json({ error: "Resume not found" }, { status: 404 });
     if (r.sizeBytes > MAX_BYTES) {
@@ -78,13 +78,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Source is not a valid PDF" }, { status: 400 });
     }
     await copyObject(r.gcsPath, key);
-    return NextResponse.json({
-      stagingKey: key,
-      prefill: {
-        roleCategory: r.roleCategory,
-        seniority: r.seniority,
-      },
-    });
+    return NextResponse.json({ stagingKey: key });
   }
 
   return NextResponse.json({ error: "Invalid mode" }, { status: 400 });

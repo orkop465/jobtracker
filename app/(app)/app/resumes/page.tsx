@@ -12,13 +12,10 @@ import { SentLog } from "@/components/app/resumes/sent-log";
 import { DragOverlay } from "@/components/app/resumes/drag-overlay";
 import { ResumeContextMenu } from "@/components/app/resumes/resume-context-menu";
 import { ResumeTagManager } from "@/components/app/resumes/resume-tag-manager";
-import { UploadTagModal } from "@/components/app/resumes/upload-tag-modal";
 import {
   relativeTime,
   type Resume,
   type ResumeTag,
-  type RoleCategory,
-  type Seniority,
 } from "@/components/app/resumes/types";
 
 type TagFilter = "all" | string;
@@ -60,7 +57,6 @@ function ResumesView() {
   const [uploadDone, setUploadDone] = useState(false);
   const [uploadFilename, setUploadFilename] = useState("");
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const newlyCreatedIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -146,8 +142,8 @@ function ResumesView() {
     return null;
   }, []);
 
-  const beginUpload = useCallback(
-    (file: File) => {
+  const startUpload = useCallback(
+    async (file: File) => {
       if (uploading) return;
       const validationError = validateFile(file);
       if (validationError) {
@@ -156,14 +152,6 @@ function ResumesView() {
         return;
       }
       setUploadError(null);
-      setPendingFile(file);
-    },
-    [toast, uploading, validateFile],
-  );
-
-  const startUpload = useCallback(
-    async (file: File, role: RoleCategory, seniority: Seniority) => {
-      setPendingFile(null);
       setUploadDone(false);
       setUploadFilename(file.name);
       setUploading(true);
@@ -172,8 +160,6 @@ function ResumesView() {
         const fd = new FormData();
         fd.append("label", defaultLabelFromFilename(file.name));
         fd.append("file", file);
-        fd.append("roleCategory", role);
-        fd.append("seniority", seniority);
         const res = await fetch("/api/resumes", { method: "POST", body: fd });
         const data = await safeJson(res);
         if (!res.ok) {
@@ -195,7 +181,7 @@ function ResumesView() {
         setUploading(false);
       }
     },
-    [toast],
+    [toast, uploading, validateFile],
   );
 
   const onParseDone = useCallback(() => {
@@ -306,7 +292,7 @@ function ResumesView() {
         style={{ display: "none" }}
         onChange={(e) => {
           const f = e.target.files?.[0];
-          if (f) beginUpload(f);
+          if (f) startUpload(f);
           e.target.value = "";
         }}
       />
@@ -465,19 +451,12 @@ function ResumesView() {
               <div className="res-preview-empty-title">Loading library…</div>
             </div>
           ) : (
-            <DropZone onFile={beginUpload} error={uploadError} />
+            <DropZone onFile={startUpload} error={uploadError} />
           )}
         </div>
       </div>
 
-      <DragOverlay onDrop={beginUpload} disabled={uploading} />
-      {pendingFile && (
-        <UploadTagModal
-          filename={pendingFile.name}
-          onCancel={() => setPendingFile(null)}
-          onSubmit={(role, sen) => startUpload(pendingFile, role, sen)}
-        />
-      )}
+      <DragOverlay onDrop={startUpload} disabled={uploading} />
 
       {uploading && (
         <ParseAnimation
