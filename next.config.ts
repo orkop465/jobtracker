@@ -21,6 +21,11 @@ const SECURITY_HEADERS = [
       "img-src 'self' data: blob: https:",
       // Resume signed-URL fetches go to storage.googleapis.com.
       "connect-src 'self' https://storage.googleapis.com https://www.google.com",
+      // pdfjs renders PDFs in a Web Worker shipped from /pdfjs/ — same-origin
+      // covered by 'self', plus blob: which pdfjs uses for some sub-resources.
+      "worker-src 'self' blob:",
+      // Marketplace peek modal iframes a signed PDF on storage.googleapis.com.
+      "frame-src 'self' https://storage.googleapis.com",
       // 'self' lets our same-origin PDF preview iframe load
       // /api/resumes/[id]/view/file. Third-party framing stays blocked.
       "frame-ancestors 'self'",
@@ -43,7 +48,13 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["lightningcss", "lightningcss-linux-x64-gnu"],
+  serverExternalPackages: [
+    "lightningcss",
+    "lightningcss-linux-x64-gnu",
+    "@napi-rs/canvas",
+    "pdfjs-dist",
+    "pdf-lib",
+  ],
   async headers() {
     return [
       {
