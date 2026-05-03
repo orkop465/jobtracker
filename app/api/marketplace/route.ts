@@ -81,7 +81,10 @@ export async function GET(req: NextRequest) {
   const nextCursor = items.length > limit ? items[items.length - 2].id : null;
   const trimmed = items.slice(0, limit);
   return NextResponse.json({
-    items: trimmed.map(toPublicDto),
+    items: trimmed.map((r) => ({
+      ...toPublicDto(r),
+      thumbUrl: r.thumbGcsPath ? `/api/marketplace/${r.id}/thumb` : null,
+    })),
     nextCursor,
   });
 }

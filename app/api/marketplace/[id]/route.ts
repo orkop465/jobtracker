@@ -3,7 +3,6 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { isAdmin } from "@/lib/auth/admin";
 import { distributionFromRatings, toPublicDto } from "@/lib/app/marketplace/serialize";
-import { signedReadUrl } from "@/lib/app/marketplace/storage";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -28,18 +27,19 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 
   const myRating = row.ratings.find((r) => r.raterUserId === userId)?.stars ?? null;
 
-  const [signed, thumbSigned] = await Promise.all([
-    signedReadUrl(row.gcsPath).catch(() => ""),
-    row.thumbGcsPath ? signedReadUrl(row.thumbGcsPath).catch(() => "") : Promise.resolve(""),
-  ]);
+  // Same-origin proxy URLs (signed URLs need a service-account client_email
+  // which user-account ADC doesn't have locally; proxying also keeps bytes
+  // behind our auth + visibility check on every fetch).
+  const fileUrl = `/api/marketplace/${row.id}/file`;
+  const thumbUrl = row.thumbGcsPath ? `/api/marketplace/${row.id}/thumb` : null;
 
   const isOwn = row.uploaderUserId === userId;
   const exposeStatus = admin || isOwn;
 
   return NextResponse.json({
     ...toPublicDto(row),
-    signedUrl: signed,
-    thumbSignedUrl: thumbSigned || null,
+    signedUrl: fileUrl,
+    thumbSignedUrl: thumbUrl,
     myRating,
     distribution: distributionFromRatings(row.ratings),
     ...(exposeStatus

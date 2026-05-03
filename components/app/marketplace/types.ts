@@ -31,6 +31,7 @@ export interface PublicResumeListItem {
   ratingSum: number;
   ratingAverage: number | null;
   featured: boolean;
+  thumbUrl: string | null;
 }
 
 export interface PublicResumeDetail extends PublicResumeListItem {

@@ -498,7 +498,7 @@ export function MarketplaceClient() {
                     <MarketCard
                       key={r.id}
                       resume={r}
-                      thumbUrl={null}
+                      thumbUrl={r.thumbUrl}
                       isSaved={savedIds.has(r.id)}
                       onSave={() => toggleSaved(r.id)}
                       onOpen={() => setOpenId(r.id)}
