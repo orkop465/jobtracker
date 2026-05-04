@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", href: "/app", icon: "dashboard" },
@@ -12,6 +12,13 @@ const NAV_ITEMS = [
   { id: "marketplace", label: "Marketplace", href: "/app/marketplace", icon: "market" },
   { id: "settings", label: "Settings", href: "/app/account", icon: "settings" },
 ];
+
+const ADMIN_ITEM = {
+  id: "admin",
+  label: "Admin",
+  href: "/app/admin/marketplace",
+  icon: "admin",
+} as const;
 
 function NavIcon({ name }: { name: string }) {
   const icons: Record<string, React.ReactNode> = {
@@ -56,6 +63,12 @@ function NavIcon({ name }: { name: string }) {
         <path d="M8 1v2m0 10v2M1 8h2m10 0h2M3.5 3.5l1.4 1.4m6.2 6.2l1.4 1.4M3.5 12.5l1.4-1.4m6.2-6.2l1.4-1.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" fill="none" />
       </g>
     ),
+    admin: (
+      <g>
+        <path d="M8 1.5l5 2v4.2c0 3-2.1 5.4-5 6.3-2.9-.9-5-3.3-5-6.3V3.5l5-2z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" fill="none" />
+        <path d="M5.5 8l1.7 1.7L11 5.7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      </g>
+    ),
   };
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -72,6 +85,20 @@ interface SidebarNavProps {
 export function SidebarNav({ userEmail, userName }: SidebarNavProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    let cancel = false;
+    fetch("/api/me/is-admin", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancel) setIsAdmin(!!d?.isAdmin);
+      })
+      .catch(() => {});
+    return () => {
+      cancel = true;
+    };
+  }, []);
 
   function isActive(href: string) {
     if (href === "/app") return pathname === "/app";
@@ -128,6 +155,22 @@ export function SidebarNav({ userEmail, userName }: SidebarNavProps) {
               <span className="side-item-label">{item.label}</span>
             </Link>
           ))}
+          {isAdmin && (
+            <>
+              <div className="side-label" style={{ marginTop: 12 }}>
+                Admin
+              </div>
+              <Link
+                key={ADMIN_ITEM.id}
+                className={`side-item ${isActive(ADMIN_ITEM.href) ? "is-active" : ""}`}
+                href={ADMIN_ITEM.href}
+                onClick={() => setMobileOpen(false)}
+              >
+                <NavIcon name={ADMIN_ITEM.icon} />
+                <span className="side-item-label">{ADMIN_ITEM.label}</span>
+              </Link>
+            </>
+          )}
         </nav>
 
         <div className="side-spacer" />

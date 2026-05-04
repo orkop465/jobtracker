@@ -264,9 +264,15 @@ function ResumesView() {
         setResumes(prev);
         const data = await safeJson(res);
         toast(data?.error ?? "Failed to update tags", "error");
+        return;
       }
+      // Server is the truth: refetch so cards reflect the saved state even
+      // when the optimistic path couldn't find the tag locally (e.g. it was
+      // just created in the tag manager and the parent state hadn't refreshed
+      // yet, leaving the card visually unchanged).
+      load(false);
     },
-    [resumes, tags, toast],
+    [load, resumes, tags, toast],
   );
 
   async function onDownload(resumeId: string) {

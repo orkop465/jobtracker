@@ -49,7 +49,7 @@ export default function LoginPage() {
 
       <h1 className="auth-title">Welcome <em>back</em>.</h1>
       <p className="auth-subtitle">
-        Move your pipeline forward. We kept your board warm &mdash; your last session was moved to <strong>Interview</strong> on Thursday.
+        Move your pipeline forward. We kept your board warm.
       </p>
 
       <form className="auth-form" onSubmit={handleSubmit}>

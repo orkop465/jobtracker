@@ -3,6 +3,7 @@
 @import "../styles/design/dashboard.css";
 @import "../styles/design/board.css";
 @import "../styles/design/resumes.css";
+@import "../styles/design/marketplace.css";
 
 @theme inline {
   /* canvas */

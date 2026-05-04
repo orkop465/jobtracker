@@ -8,7 +8,6 @@ import {
   KeyboardSensor,
   closestCenter,
   pointerWithin,
-  rectIntersection,
   getFirstCollision,
   useSensor,
   useSensors,

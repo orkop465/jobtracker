@@ -49,6 +49,33 @@ enum InterviewType {
   OTHER
 }
 
+enum MarketplaceRoleCategory {
+  SWE
+  PM
+  DESIGN
+  DATA
+  ML
+  DEVOPS
+  SECURITY
+  OTHER
+}
+
+enum MarketplaceSeniority {
+  STUDENT
+  INTERN
+  ENTRY
+  MID
+  SENIOR
+  STAFF_PLUS
+}
+
+enum PublicResumeStatus {
+  PENDING_REVIEW
+  PUBLISHED
+  REJECTED
+  UNPUBLISHED
+}
+
 model User {
   id            String    @id @default(cuid())
   email         String?   @unique
@@ -69,6 +96,10 @@ model User {
   boardColumns BoardColumn[]
   followUps    FollowUp[]
   interviews   Interview[]
+
+  publicResumes       PublicResume[]       @relation("PublicResumeUploader")
+  publicResumeRatings PublicResumeRating[] @relation("PublicResumeRater")
+  publicResumeSaves   PublicResumeSave[]   @relation("PublicResumeSaver")
 
   weeklyGoal Int?
 
@@ -291,4 +322,70 @@ model Interview {
 
   @@index([userId, scheduledAt])
   @@index([applicationId])
+}
+
+model PublicResumeSave {
+  id             String       @id @default(cuid())
+  publicResumeId String
+  publicResume   PublicResume @relation(fields: [publicResumeId], references: [id], onDelete: Cascade)
+
+  saverUserId String
+  saver       User   @relation("PublicResumeSaver", fields: [saverUserId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([publicResumeId, saverUserId])
+  @@index([saverUserId])
+}
+
+model PublicResume {
+  id             String @id @default(cuid())
+  uploaderUserId String
+  uploader       User   @relation("PublicResumeUploader", fields: [uploaderUserId], references: [id], onDelete: Cascade)
+
+  title        String
+  roleCategory MarketplaceRoleCategory
+  seniority    MarketplaceSeniority
+  notes        String?
+
+  gcsPath      String  @unique
+  thumbGcsPath String?
+  pageCount    Int
+  sizeBytes    Int
+
+  status          PublicResumeStatus @default(PENDING_REVIEW)
+  rejectionReason String?
+  reviewedAt      DateTime?
+  publishedAt     DateTime?
+  featured        Boolean            @default(false)
+
+  ratingCount Int @default(0)
+  ratingSum   Int @default(0)
+
+  ratings PublicResumeRating[]
+  saves   PublicResumeSave[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([uploaderUserId])
+  @@index([status, publishedAt])
+  @@index([roleCategory, seniority, status])
+}
+
+model PublicResumeRating {
+  id             String       @id @default(cuid())
+  publicResumeId String
+  publicResume   PublicResume @relation(fields: [publicResumeId], references: [id], onDelete: Cascade)
+
+  raterUserId String
+  rater       User   @relation("PublicResumeRater", fields: [raterUserId], references: [id], onDelete: Cascade)
+
+  stars Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([publicResumeId, raterUserId])
+  @@index([raterUserId])
 }
