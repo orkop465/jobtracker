@@ -117,11 +117,19 @@ export function boardShuffle<T>(arr: readonly T[]): T[] {
 }
 
 function randomStageDist(): BoardStage[] {
-  const stages: BoardStage[] = ['applied', 'phone', 'interview', 'offer'];
+  const nonOfferStages: BoardStage[] = ['applied', 'phone', 'interview'];
   const totalCards = 6 + Math.floor(Math.random() * 5);
-  const dist: BoardStage[] = ['applied', 'offer'];
-  for (let i = 2; i < totalCards; i++) {
-    dist.push(stages[Math.floor(Math.random() * stages.length)]);
+  const dist: BoardStage[] = ['applied'];
+  let offerCount = 0;
+  const OFFER_MAX = 2;
+  const OFFER_CHANCE = 0.08;
+  for (let i = 1; i < totalCards; i++) {
+    if (offerCount < OFFER_MAX && Math.random() < OFFER_CHANCE) {
+      dist.push('offer');
+      offerCount++;
+    } else {
+      dist.push(nonOfferStages[Math.floor(Math.random() * nonOfferStages.length)]);
+    }
   }
   return dist;
 }

@@ -136,7 +136,9 @@ export async function rasterize(args: {
 
   const pdfBytes = await out.save({ useObjectStreams: true });
 
-  // Thumbnail: ~360px wide JPEG of page 1.
+  // Thumbnail: ~1000px wide JPEG of page 1. Featured cards span 2 grid cols
+  // (~700px on common viewports) and even regular cards are ~340px on retina,
+  // so anything smaller scales up and looks fuzzy.
   const thumbBytes = await makeThumb(firstPagePngBytes!);
 
   return { pdfBytes, thumbBytes, pageCount };
@@ -145,15 +147,17 @@ export async function rasterize(args: {
 async function makeThumb(pngBytes: Uint8Array): Promise<Uint8Array> {
   const { loadImage, createCanvas: cc } = await import("@napi-rs/canvas");
   const img = await loadImage(Buffer.from(pngBytes));
-  const targetWidth = 360;
+  const targetWidth = 1000;
   const scale = targetWidth / img.width;
   const targetHeight = Math.round(img.height * scale);
   const c = cc(targetWidth, targetHeight);
   const ctx = c.getContext("2d");
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, targetWidth, targetHeight);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-  return c.encode("jpeg", 78);
+  return c.encode("jpeg", 85);
 }
 
 const PDF_MAGIC = Buffer.from("%PDF-", "ascii");
