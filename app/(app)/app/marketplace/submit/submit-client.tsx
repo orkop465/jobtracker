@@ -14,8 +14,43 @@ interface Props {
   stagingKey: string;
 }
 
-const AFFIRMATION =
-  "I confirm I have covered every piece of personally identifiable information in this resume (name, contact info, specific employer/school names if I want them hidden, etc.). I understand an admin will review this before it goes public, but I am responsible for the accuracy of this redaction.";
+interface AffirmationItem {
+  id: string;
+  label: string;
+}
+
+const AFFIRMATIONS: AffirmationItem[] = [
+  {
+    id: "name",
+    label:
+      "I have redacted my full legal name, any preferred or alternative names, and any initials that could identify me, in every place they appear in this resume.",
+  },
+  {
+    id: "contact",
+    label:
+      "I have redacted my email address, phone number(s), and every other direct contact identifier (including personal websites, social handles, and messaging IDs).",
+  },
+  {
+    id: "address",
+    label:
+      "I have redacted my home address, mailing address, city of residence, and any other physical location identifiers I do not wish to disclose publicly.",
+  },
+  {
+    id: "orgs",
+    label:
+      "I have redacted the names of any current or former employers and educational institutions that I do not want to be publicly associated with this resume.",
+  },
+  {
+    id: "liability",
+    label:
+      "I acknowledge that I am solely responsible for any personally identifiable information that remains visible after submission, and I agree that the operator of this marketplace bears no liability for any PII that is not properly redacted by me.",
+  },
+  {
+    id: "review",
+    label:
+      "I consent to a marketplace administrator reviewing my redacted resume in full prior to publication, and I understand that administrative approval does not constitute a guarantee that all PII has been removed.",
+  },
+];
 
 export function SubmitClient({ stagingKey }: Props) {
   const router = useRouter();
@@ -25,7 +60,16 @@ export function SubmitClient({ stagingKey }: Props) {
   const [role, setRole] = useState<RoleId | "">("");
   const [seniority, setSeniority] = useState<SeniorityId | "">("");
   const [notes, setNotes] = useState("");
-  const [affirmed, setAffirmed] = useState(false);
+  const [affirmedSet, setAffirmedSet] = useState<Set<string>>(() => new Set());
+  const allAffirmed = affirmedSet.size === AFFIRMATIONS.length;
+  const toggleAffirm = (id: string) => {
+    setAffirmedSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -41,7 +85,7 @@ export function SubmitClient({ stagingKey }: Props) {
     role &&
     seniority &&
     rectangles.length > 0 &&
-    affirmed &&
+    allAffirmed &&
     !submitting;
 
   const onPageCount = useCallback((n: number) => setPageCount(n), []);
@@ -82,7 +126,7 @@ export function SubmitClient({ stagingKey }: Props) {
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "minmax(0, 1fr) 360px",
+        gridTemplateColumns: "minmax(0, 1fr) 400px",
         height: "100%",
         minHeight: 0,
         background: "var(--bg)",
@@ -128,9 +172,10 @@ export function SubmitClient({ stagingKey }: Props) {
             marginBottom: 18,
           }}
         >
-          Drag a black rectangle over your name, email, phone, school name, employer logos —
-          anything you don&apos;t want public. Click a rectangle to select it; press Delete to
-          remove. The server rebuilds the PDF as flat images so redacted text cannot be recovered.
+          Use <strong>Highlight</strong> mode to drag across text and instantly redact it — click
+          any highlight to remove it. Switch to <strong>Rectangle</strong> mode to draw a black box
+          over logos, photos, or scanned regions. The server rebuilds the PDF as flat images so
+          redacted content cannot be recovered after submission.
         </p>
 
         <RedactionCanvas
@@ -141,7 +186,11 @@ export function SubmitClient({ stagingKey }: Props) {
         />
       </div>
 
+      <style>{`
+        .rdx-sidebar > * { flex-shrink: 0; }
+      `}</style>
       <aside
+        className="rdx-sidebar"
         style={{
           padding: "24px 24px 60px",
           overflowY: "auto",
@@ -179,33 +228,38 @@ export function SubmitClient({ stagingKey }: Props) {
           style={inputStyle}
         />
 
-        <FieldLabel>Role</FieldLabel>
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value as RoleId)}
-          style={inputStyle}
-        >
-          <option value="">Choose role…</option>
-          {ROLE_FILTERS.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-
-        <FieldLabel>Seniority</FieldLabel>
-        <select
-          value={seniority}
-          onChange={(e) => setSeniority(e.target.value as SeniorityId)}
-          style={inputStyle}
-        >
-          <option value="">Choose level…</option>
-          {SENIORITY_FILTERS.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <FieldLabel>Role</FieldLabel>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as RoleId)}
+              style={inputStyle}
+            >
+              <option value="">Choose role…</option>
+              {ROLE_FILTERS.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <FieldLabel>Seniority</FieldLabel>
+            <select
+              value={seniority}
+              onChange={(e) => setSeniority(e.target.value as SeniorityId)}
+              style={inputStyle}
+            >
+              <option value="">Choose level…</option>
+              {SENIORITY_FILTERS.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
 
         <FieldLabel>Notes (optional)</FieldLabel>
         <textarea
@@ -217,29 +271,72 @@ export function SubmitClient({ stagingKey }: Props) {
           style={{ ...inputStyle, resize: "vertical", fontFamily: "var(--sans)" }}
         />
 
-        <label
+        <div
           style={{
-            display: "flex",
-            gap: 8,
-            alignItems: "flex-start",
-            fontFamily: "var(--sans)",
-            fontSize: 12,
-            color: "var(--ink-2)",
-            lineHeight: 1.5,
             border: "1px dashed var(--line-2)",
-            padding: 12,
             borderRadius: 4,
+            padding: "8px 10px 10px",
             background: "var(--bg-2)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
           }}
         >
-          <input
-            type="checkbox"
-            checked={affirmed}
-            onChange={(e) => setAffirmed(e.target.checked)}
-            style={{ marginTop: 2 }}
-          />
-          <span>{AFFIRMATION}</span>
-        </label>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              justifyContent: "space-between",
+              gap: 8,
+              marginBottom: 2,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 10,
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                color: "var(--accent-ink)",
+              }}
+            >
+              Submission agreement · check each
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 10,
+                letterSpacing: "0.08em",
+                color: allAffirmed ? "var(--accent-ink)" : "var(--ink-3)",
+              }}
+            >
+              {affirmedSet.size}/{AFFIRMATIONS.length}
+            </div>
+          </div>
+          {AFFIRMATIONS.map((a) => (
+            <label
+              key={a.id}
+              style={{
+                display: "flex",
+                gap: 7,
+                alignItems: "flex-start",
+                fontFamily: "var(--sans)",
+                fontSize: 11,
+                color: "var(--ink-2)",
+                lineHeight: 1.4,
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={affirmedSet.has(a.id)}
+                onChange={() => toggleAffirm(a.id)}
+                style={{ marginTop: 2, flexShrink: 0, transform: "scale(0.95)" }}
+              />
+              <span>{a.label}</span>
+            </label>
+          ))}
+        </div>
 
         {error && (
           <div
